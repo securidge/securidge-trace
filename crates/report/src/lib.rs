@@ -1,13 +1,13 @@
-//! st-report: 분석 결과를 파일로 내보낸다.
+//! st-report: 점검 결과를 파일로 내보낸다.
 //!
-//! 지금 만드는 파일
-//! - `evidence.json` : 근거 데이터 전체. **같은 입력이면 항상 같은 내용**이 나오도록
-//!   실행 시각이나 절대 경로 같은 값은 넣지 않는다 (개발 요청서 2장 8번: 재현 가능).
-//! - `timeline.csv`  : 사람이 엑셀로 열어 볼 수 있는 시간순 목록.
-//! - `run.json`      : 이번 실행에 대한 정보 (실행 시각, 점검자 등). 실행마다 달라진다.
-//! - `SHA256SUMS.txt`: 위 파일들의 해시.
-//!
-//! 2단 HTML 보고서는 Phase 4 과제다.
+//! 만드는 파일
+//! - `case.json`      : 점검 한 건의 모든 정보. 지난 내역과 "다른 언어로 다시 만들기"는 이 파일만 읽는다.
+//! - `evidence.json`  : 근거 데이터. **같은 입력이면 항상 같은 내용** (실행 시각·절대 경로 없음).
+//! - `timeline.csv`   : 시간순 목록 (엑셀용).
+//! - `report_ko.html` / `report_en.html` : 2단 보고서 (1부 요약, 2부 근거). 외부 파일 없이 열린다.
+//! - `SHA256SUMS.txt` : 위 파일들의 변조 확인 값.
+
+pub mod html;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -16,81 +16,138 @@ use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use st_collect::ScanCheck;
-use st_core::{hash, Coverage, Event, Issue};
+use st_core::{hash, Event};
 use st_i18n::Lang;
+use st_rules::{Assessment, ToolMedia};
 use st_timeline::Analysis;
 
-/// 근거 파일 형식 버전. 구조를 바꾸면 올린다 (예전 내역을 열 수 있게 하기 위함).
-pub const EVIDENCE_SCHEMA_VERSION: u32 = 1;
+/// case.json 형식 버전. 구조를 바꾸면 올리고, 예전 내역을 읽을 수 있게 변환 코드를 둔다.
+pub const CASE_SCHEMA_VERSION: u32 = 1;
+pub const EVIDENCE_SCHEMA_VERSION: u32 = 2;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaseInfo {
+    pub customer: String,
+    pub pc_name: String,
+    pub analyst: String,
+    pub company: String,
+    /// "live"(이 PC 직접 점검) 또는 "offline"(수집해 둔 자료 분석)
+    pub mode: String,
+    pub input_root: String,
+    pub started_utc: DateTime<Utc>,
+    pub finished_utc: DateTime<Utc>,
+    /// 점검 기간(일). 0이면 전체.
+    pub period_days: u32,
+    pub consent: bool,
+    pub admin: bool,
+    pub tool_version: String,
+    pub tool_media: ToolMedia,
+    pub input_unchanged: bool,
+    pub time_zone: String,
+    pub mask_names: bool,
+}
+
+/// 수집 단계에서 만든 사본 하나 (실행 중 PC 점검).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollectedFile {
+    pub artifact: String,
+    /// 읽은 방법 (예: "reg save HKLM\\SYSTEM", "wevtutil epl Security")
+    pub method: String,
+    pub ok: bool,
+    pub sha256: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaseData {
+    pub schema_version: u32,
+    pub info: CaseInfo,
+    pub checks: Vec<ScanCheck>,
+    pub input_hashes: BTreeMap<String, String>,
+    pub collection: Vec<CollectedFile>,
+    pub analysis: Analysis,
+    pub assessment: Assessment,
+}
 
 #[derive(Serialize)]
 struct Evidence<'a> {
     schema_version: u32,
     tool_version: &'a str,
     checks: &'a [ScanCheck],
-    coverage: &'a [Coverage],
+    coverage: &'a [st_core::Coverage],
     input_hashes: &'a BTreeMap<String, String>,
+    system: &'a st_parsers::registry::SystemInfo,
+    accounts: &'a [st_parsers::registry::Account],
+    devices: &'a [st_parsers::registry::Device],
+    networks: &'a [st_parsers::registry::Network],
     events: &'a [Event],
-    issues: &'a [Issue],
-}
-
-/// 이번 실행에 대한 정보.
-#[derive(Debug, Clone, Serialize)]
-pub struct RunInfo {
-    pub case_name: String,
-    pub analyst: String,
-    pub lang: String,
-    pub display_time_zone: String,
-    pub started_utc: DateTime<Utc>,
-    pub finished_utc: DateTime<Utc>,
-    /// 표시용 시각 (개발 요청서 9.1 형식)
-    pub started_display: String,
-    pub finished_display: String,
-    pub clock_note: String,
-    pub input_root: String,
-    /// 분석 전후 입력 해시가 같았는가
-    pub input_unchanged: bool,
-    pub tool_version: String,
-}
-
-pub struct Inputs<'a> {
-    pub analysis: &'a Analysis,
-    pub checks: &'a [ScanCheck],
-    pub input_hashes: &'a BTreeMap<String, String>,
-    pub run: &'a RunInfo,
-    pub tz: Tz,
-    pub lang: Lang,
+    issues: &'a [st_core::Issue],
 }
 
 /// 결과 파일들을 `dir`에 쓴다. 쓴 파일 이름 → SHA-256을 돌려준다.
-pub fn write_all(dir: &Path, inp: &Inputs) -> Result<BTreeMap<String, String>, String> {
+pub fn write_all(dir: &Path, case: &CaseData, report_langs: &[Lang]) -> Result<BTreeMap<String, String>, String> {
     fs::create_dir_all(dir).map_err(|e| format!("출력 폴더를 만들지 못함: {e}"))?;
+    let tz: Tz = case.info.time_zone.parse().unwrap_or(chrono_tz::Asia::Seoul);
 
+    let a = &case.analysis;
     let evidence = Evidence {
         schema_version: EVIDENCE_SCHEMA_VERSION,
-        tool_version: &inp.run.tool_version,
-        checks: inp.checks,
-        coverage: &inp.analysis.coverage,
-        input_hashes: inp.input_hashes,
-        events: &inp.analysis.events,
-        issues: &inp.analysis.issues,
+        tool_version: &case.info.tool_version,
+        checks: &case.checks,
+        coverage: &a.coverage,
+        input_hashes: &case.input_hashes,
+        system: &a.system,
+        accounts: &a.accounts,
+        devices: &a.devices,
+        networks: &a.networks,
+        events: &a.events,
+        issues: &a.issues,
     };
-    let evidence_json =
-        serde_json::to_vec_pretty(&evidence).map_err(|e| format!("근거 JSON 생성 실패: {e}"))?;
-    write_file(&dir.join("evidence.json"), &evidence_json)?;
+    write_json(&dir.join("evidence.json"), &evidence)?;
+    write_json(&dir.join("case.json"), case)?;
+    let csv_lang = report_langs.first().copied().unwrap_or(Lang::Ko);
+    write_file(&dir.join("timeline.csv"), &timeline_csv(&a.events, tz, csv_lang)?)?;
+    for &lang in report_langs {
+        let html = html::render(case, lang, None);
+        write_file(&dir.join(format!("report_{}.html", lang.code())), html.as_bytes())?;
+    }
+    write_sums(dir)
+}
 
-    write_file(&dir.join("timeline.csv"), &timeline_csv(&inp.analysis.events, inp.tz, inp.lang)?)?;
+/// 저장된 case.json으로 다른 언어 보고서를 다시 만든다 (재수집 없음).
+pub fn regenerate(dir: &Path, lang: Lang) -> Result<std::path::PathBuf, String> {
+    let case = load_case(dir)?;
+    let html = html::render(&case, lang, Some(Utc::now()));
+    let path = dir.join(format!("report_{}.html", lang.code()));
+    write_file(&path, html.as_bytes())?;
+    write_sums(dir)?;
+    Ok(path)
+}
 
-    let run_json =
-        serde_json::to_vec_pretty(inp.run).map_err(|e| format!("실행 정보 생성 실패: {e}"))?;
-    write_file(&dir.join("run.json"), &run_json)?;
+pub fn load_case(dir: &Path) -> Result<CaseData, String> {
+    let text = fs::read_to_string(dir.join("case.json")).map_err(|e| format!("case.json을 읽지 못함: {e}"))?;
+    serde_json::from_str(&text).map_err(|e| format!("case.json 형식 오류: {e}"))
+}
 
+fn write_json<T: Serialize>(path: &Path, v: &T) -> Result<(), String> {
+    let data = serde_json::to_vec_pretty(v).map_err(|e| format!("JSON 생성 실패: {e}"))?;
+    write_file(path, &data)
+}
+
+/// 폴더 안 결과 파일들의 SHA-256 목록을 다시 쓴다.
+pub fn write_sums(dir: &Path) -> Result<BTreeMap<String, String>, String> {
     let mut sums = BTreeMap::new();
-    for name in ["evidence.json", "timeline.csv", "run.json"] {
-        let h = hash::sha256_file(&dir.join(name)).map_err(|e| format!("해시 계산 실패: {e}"))?;
-        sums.insert(name.to_string(), h);
+    let rd = fs::read_dir(dir).map_err(|e| format!("폴더를 읽지 못함: {e}"))?;
+    for entry in rd.flatten() {
+        let p = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !p.is_file() || name == "SHA256SUMS.txt" {
+            continue;
+        }
+        let h = hash::sha256_file(&p).map_err(|e| format!("해시 계산 실패: {e}"))?;
+        sums.insert(name, h);
     }
     let mut listing = String::new();
     for (name, h) in &sums {
@@ -98,6 +155,20 @@ pub fn write_all(dir: &Path, inp: &Inputs) -> Result<BTreeMap<String, String>, S
     }
     write_file(&dir.join("SHA256SUMS.txt"), listing.as_bytes())?;
     Ok(sums)
+}
+
+/// SHA256SUMS.txt와 실제 파일을 비교한다. 바뀐 파일 이름 목록 (없으면 빈 목록).
+pub fn verify_sums(dir: &Path) -> Result<Vec<String>, String> {
+    let text = fs::read_to_string(dir.join("SHA256SUMS.txt")).map_err(|e| format!("목록을 읽지 못함: {e}"))?;
+    let mut changed = Vec::new();
+    for line in text.lines() {
+        let Some((h, name)) = line.split_once("  ") else { continue };
+        let now = hash::sha256_file(&dir.join(name)).unwrap_or_default();
+        if now != h {
+            changed.push(name.to_string());
+        }
+    }
+    Ok(changed)
 }
 
 fn write_file(path: &Path, data: &[u8]) -> Result<(), String> {
@@ -111,28 +182,12 @@ pub fn timeline_csv(events: &[Event], tz: Tz, lang: Lang) -> Result<Vec<u8>, Str
     {
         let mut w = csv::Writer::from_writer(&mut out);
         w.write_record([
-            "time_display",
-            "time_utc",
-            "time_basis",
-            "kind",
-            "kind_label",
-            "subject",
-            "account_name",
-            "account_sid",
-            "confidence",
-            "artifact",
-            "source_file",
-            "source_record",
-            "details",
-            "caveats",
+            "time_display", "time_utc", "time_basis", "kind", "kind_label", "subject", "account_name",
+            "account_sid", "confidence", "artifact", "source_file", "source_record", "details", "caveats",
         ])
         .map_err(|e| e.to_string())?;
         for e in events {
-            let display = e
-                .time
-                .utc
-                .map(|t| st_i18n::format_stamp_with_zone(t, tz, lang))
-                .unwrap_or_default();
+            let display = e.time.utc.map(|t| st_i18n::format_stamp_with_zone(t, tz, lang)).unwrap_or_default();
             let utc = e.time.utc.map(|t| t.to_rfc3339()).unwrap_or_default();
             let kind = format!("{:?}", e.kind);
             let details = serde_json::to_string(&e.details).map_err(|e| e.to_string())?;
@@ -143,13 +198,13 @@ pub fn timeline_csv(events: &[Event], tz: Tz, lang: Lang) -> Result<Vec<u8>, Str
                 kind.as_str(),
                 &st_i18n::t(lang, &format!("kind.{kind}")),
                 neutralize_formula(&e.subject).as_str(),
-                e.account.name.as_deref().unwrap_or(""),
+                neutralize_formula(e.account.name.as_deref().unwrap_or("")).as_str(),
                 e.account.sid.as_deref().unwrap_or(""),
                 &format!("{:?}", e.confidence),
                 e.source.artifact.as_str(),
                 e.source.file.as_str(),
                 e.source.record.as_str(),
-                details.as_str(),
+                neutralize_formula(&details).as_str(),
                 &e.caveats.join(" / "),
             ])
             .map_err(|e| e.to_string())?;
@@ -159,8 +214,8 @@ pub fn timeline_csv(events: &[Event], tz: Tz, lang: Lang) -> Result<Vec<u8>, Str
     Ok(out)
 }
 
-/// 엑셀은 `=`, `+`, `-`, `@`로 시작하는 칸을 수식으로 실행한다. 분석 대상에서 온 값
-/// (파일 이름, URL)이 그렇게 시작하면 앞에 작은따옴표를 붙여 글자로만 읽히게 한다.
+/// 엑셀은 `=`, `+`, `-`, `@`로 시작하는 칸을 수식으로 실행한다. 분석 대상에서 온 값이
+/// 그렇게 시작하면 앞에 작은따옴표를 붙여 글자로만 읽히게 한다.
 fn neutralize_formula(s: &str) -> String {
     match s.chars().next() {
         Some('=' | '+' | '-' | '@' | '\t' | '\r') => format!("'{s}"),
@@ -169,6 +224,7 @@ fn neutralize_formula(s: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 

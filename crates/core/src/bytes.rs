@@ -53,6 +53,7 @@ pub fn bytes_until_nul(data: &[u8], offset: usize, max_len: usize) -> Option<&[u
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 

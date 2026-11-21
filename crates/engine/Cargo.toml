@@ -1,0 +1,22 @@
+[package]
+name = "st-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "점검 실행, 설정·고객사·지난 내역 관리"
+
+[dependencies]
+st-core.workspace = true
+st-i18n.workspace = true
+st-collect.workspace = true
+st-timeline.workspace = true
+st-rules.workspace = true
+st-report.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+encoding_rs.workspace = true
+
+[lints]
+workspace = true

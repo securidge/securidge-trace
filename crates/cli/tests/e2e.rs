@@ -124,9 +124,15 @@ fn full_run_is_correct_reproducible_and_leaves_input_untouched() {
     // 입력 폴더가 그대로인가 (새 파일이 생기지도, 내용이 바뀌지도 않아야 한다)
     assert_eq!(before, snapshot(&input), "분석이 입력 폴더를 바꿨음");
 
-    // 결과 폴더 이름: Trace_<사건명>_<YYYYMMDD_HHMMSS>
+    // 결과 폴더 이름: <YYYYMMDD_HHMMSS>_<사건명>
     let dir_name = dir1.file_name().unwrap().to_string_lossy().into_owned();
-    assert!(dir_name.starts_with("Trace_고객사A_PC-01_20"), "{dir_name}");
+    assert!(dir_name.starts_with("20") && dir_name.ends_with("_고객사A_PC-01"), "{dir_name}");
+    // 보고서와 case.json
+    let html = fs::read_to_string(dir1.join("report_ko.html")).unwrap();
+    assert!(html.contains("PC 사용 기록 점검 보고서"));
+    assert!(html.contains("판단 불가"), "SYSTEM 하이브가 없으므로 판단 불가");
+    assert!(!html.contains("<script>alert"), "값은 이스케이프되어야 함");
+    assert!(dir1.join("case.json").is_file());
 
     let evidence: serde_json::Value =
         serde_json::from_slice(&fs::read(dir1.join("evidence.json")).unwrap()).unwrap();
@@ -169,25 +175,32 @@ fn full_run_is_correct_reproducible_and_leaves_input_untouched() {
 
     // 해시 목록이 실제 파일과 맞는가
     let sums = fs::read_to_string(dir1.join("SHA256SUMS.txt")).unwrap();
-    assert_eq!(sums.lines().count(), 3);
+    assert_eq!(sums.lines().count(), 4, "{sums}");
+    assert!(st_report::verify_sums(&dir1).unwrap().is_empty());
 
-    // 실행 정보: 요청한 형식의 실행 시각
-    let run: serde_json::Value =
-        serde_json::from_slice(&fs::read(dir1.join("run.json")).unwrap()).unwrap();
-    let display = run["finished_display"].as_str().unwrap();
-    let chars: Vec<char> = display.chars().collect();
-    // 예: 2026.11.21.(토), 18:01:02 (KST, UTC+09:00)
+    // 보고서의 실행 시각 형식: 2026.11.21.(토), 18:01:02 (KST, UTC+09:00)
+    let created = html.split("보고서 생성</td><td>").nth(1).unwrap().split('<').next().unwrap();
+    let chars: Vec<char> = created.chars().collect();
     assert_eq!(chars[4], '.');
     assert_eq!(chars[10], '.');
     assert_eq!(chars[11], '(');
-    assert!(display.ends_with("(KST, UTC+09:00)"), "{display}");
-    assert_eq!(run["input_unchanged"], true);
+    assert!(created.ends_with("(KST, UTC+09:00)"), "{created}");
+    let case: serde_json::Value = serde_json::from_slice(&fs::read(dir1.join("case.json")).unwrap()).unwrap();
+    assert_eq!(case["info"]["input_unchanged"], true);
+
+    // 다른 언어로 다시 만들기 (재수집 없음)
+    let st = Command::new(env!("CARGO_BIN_EXE_trace")).args(["regen", "--dir"]).arg(&dir1).args(["--lang", "en"]).status().unwrap();
+    assert!(st.success());
+    let en = fs::read_to_string(dir1.join("report_en.html")).unwrap();
+    assert!(en.contains("PC Activity Review Report") && en.contains("Report regenerated"));
+    assert!(st_report::verify_sums(&dir1).unwrap().is_empty());
 
     // 두 번째 실행(영어): 근거 파일은 언어와 무관하게 완전히 같아야 한다
     let out2 = temp_dir("out2");
     let (code2, stdout2, dir2) = run_trace(&input, &out2, "en");
     assert_eq!(code2, 2);
     assert!(stdout2.contains("Input files were not changed"), "{stdout2}");
+    assert!(dir2.join("report_en.html").is_file());
     assert_eq!(
         fs::read(dir1.join("evidence.json")).unwrap(),
         fs::read(dir2.join("evidence.json")).unwrap(),
@@ -225,5 +238,5 @@ fn clean_input_produces_no_events_and_exit_zero() {
         serde_json::from_slice(&fs::read(dir.join("evidence.json")).unwrap()).unwrap();
     assert_eq!(evidence["events"].as_array().unwrap().len(), 0);
     // 못 찾은 아티팩트도 '0개'로 목록에 남아야 한다 (기록 없음과 행위 없음의 구분)
-    assert_eq!(evidence["checks"].as_array().unwrap().len(), 4);
+    assert_eq!(evidence["checks"].as_array().unwrap().len(), 10);
 }

@@ -54,6 +54,28 @@ pub enum EventKind {
     WebVisit,
     /// 웹에서 파일 내려받음
     WebDownload,
+    /// 장치가 이 PC에 처음 설치(연결)됨
+    DeviceFirstConnected,
+    /// 장치가 마지막으로 연결됨
+    DeviceLastConnected,
+    /// 장치가 마지막으로 분리됨
+    DeviceLastRemoved,
+    /// 저장장치 연결·분리 기록 (이벤트 로그, 볼륨 시리얼 포함 가능)
+    StorageAttached,
+    /// 네트워크에 처음 연결됨
+    NetworkFirstConnected,
+    /// 네트워크에 마지막으로 연결됨
+    NetworkLastConnected,
+    /// 무선 네트워크 연결 (이벤트 로그)
+    WlanConnected,
+    /// 무선 네트워크 연결 끊김 (이벤트 로그)
+    WlanDisconnected,
+    /// 블루투스 장치 마지막 연결
+    BluetoothConnected,
+    /// 이벤트 로그가 지워짐
+    LogCleared,
+    /// 시스템 시각이 바뀜
+    TimeChanged,
 }
 
 /// 이 사실이 어디에서 나왔는지.
@@ -91,11 +113,18 @@ pub struct Event {
 }
 
 /// 읽지 못했거나 건너뛴 항목. 프로그램을 멈추지 않고 여기에 쌓는다.
+/// reason이 "참고:"로 시작하면 실패가 아니라 알아 둘 내용이다.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Issue {
     pub artifact: String,
     pub file: String,
     pub reason: String,
+}
+
+impl Issue {
+    pub fn is_note(&self) -> bool {
+        self.reason.starts_with("참고:")
+    }
 }
 
 /// 아티팩트별 데이터 범위 (개발 요청서 2장 7번: "기록 없음"과 "행위 없음"을 구분).

@@ -6,6 +6,8 @@ members = [
     "crates/collect",
     "crates/parsers",
     "crates/timeline",
+    "crates/rules",
+    "crates/engine",
     "crates/report",
     "crates/cli",
 ]
@@ -32,6 +34,8 @@ st-collect = { path = "crates/collect" }
 st-parsers = { path = "crates/parsers" }
 st-timeline = { path = "crates/timeline" }
 st-report = { path = "crates/report" }
+st-rules = { path = "crates/rules" }
+st-engine = { path = "crates/engine" }
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

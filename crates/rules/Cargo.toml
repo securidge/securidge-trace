@@ -1,0 +1,16 @@
+[package]
+name = "st-rules"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "상관 분석과 판단 규칙"
+
+[dependencies]
+st-core.workspace = true
+st-timeline.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

@@ -11,11 +11,13 @@ chrono.workspace = true
 serde.workspace = true
 rusqlite.workspace = true
 encoding_rs.workspace = true
+notatin = "=1.0.1"
+evtx = { version = "0.15", default-features = false }
+serde_json.workspace = true
 
 [dev-dependencies]
 # 교차 검증용: 독립적으로 만들어진 다른 LNK 파서와 결과를 비교한다.
 lnk_parser = "0.4.3"
-serde_json.workspace = true
 
 [lints]
 workspace = true

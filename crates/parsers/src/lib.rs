@@ -7,5 +7,8 @@
 //! - 각 파서 파일 맨 위에 근거 문서를 적는다.
 
 pub mod browser;
+pub mod eventlog;
+pub mod hive;
+pub mod registry;
 pub mod lnk;
 pub mod recyclebin;

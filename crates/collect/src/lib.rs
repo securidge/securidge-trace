@@ -25,10 +25,43 @@ pub const ARTIFACT_RECYCLE_BIN: &str = "recycle_bin";
 pub const ARTIFACT_LNK: &str = "lnk";
 pub const ARTIFACT_CHROMIUM: &str = "chromium_history";
 pub const ARTIFACT_FIREFOX: &str = "firefox_history";
+pub const ARTIFACT_HIVE_SYSTEM: &str = "hive_system";
+pub const ARTIFACT_HIVE_SOFTWARE: &str = "hive_software";
+pub const ARTIFACT_EVTX_SECURITY: &str = "evtx_security";
+pub const ARTIFACT_EVTX_SYSTEM: &str = "evtx_system";
+pub const ARTIFACT_EVTX_PARTITION: &str = "evtx_partition";
+pub const ARTIFACT_EVTX_WLAN: &str = "evtx_wlan";
 
 /// 찾으려는 아티팩트 전체 목록 (못 찾은 것도 보고서에 "없음"으로 나와야 한다).
-pub const ALL_ARTIFACTS: [&str; 4] =
-    [ARTIFACT_RECYCLE_BIN, ARTIFACT_LNK, ARTIFACT_CHROMIUM, ARTIFACT_FIREFOX];
+pub const ALL_ARTIFACTS: [&str; 10] = [
+    ARTIFACT_HIVE_SYSTEM,
+    ARTIFACT_HIVE_SOFTWARE,
+    ARTIFACT_EVTX_SECURITY,
+    ARTIFACT_EVTX_SYSTEM,
+    ARTIFACT_EVTX_PARTITION,
+    ARTIFACT_EVTX_WLAN,
+    ARTIFACT_RECYCLE_BIN,
+    ARTIFACT_LNK,
+    ARTIFACT_CHROMIUM,
+    ARTIFACT_FIREFOX,
+];
+
+/// (아티팩트, Windows 폴더 기준 경로) — 레지스트리 하이브와 이벤트 로그.
+/// 실행 중인 PC에서는 잠겨 있어 수집 단계(live)가 사본을 만들어 둔다.
+pub const SYSTEM_FILES: [(&str, &[&str]); 6] = [
+    (ARTIFACT_HIVE_SYSTEM, &["Windows", "System32", "config", "SYSTEM"]),
+    (ARTIFACT_HIVE_SOFTWARE, &["Windows", "System32", "config", "SOFTWARE"]),
+    (ARTIFACT_EVTX_SECURITY, &["Windows", "System32", "winevt", "Logs", "Security.evtx"]),
+    (ARTIFACT_EVTX_SYSTEM, &["Windows", "System32", "winevt", "Logs", "System.evtx"]),
+    (
+        ARTIFACT_EVTX_PARTITION,
+        &["Windows", "System32", "winevt", "Logs", "Microsoft-Windows-Partition%4Diagnostic.evtx"],
+    ),
+    (
+        ARTIFACT_EVTX_WLAN,
+        &["Windows", "System32", "winevt", "Logs", "Microsoft-Windows-WLAN-AutoConfig%4Operational.evtx"],
+    ),
+];
 
 #[derive(Debug, Clone, Deserialize)]
 struct BrowserDef {
@@ -52,7 +85,7 @@ pub struct FoundItem {
 }
 
 /// 아티팩트별로 몇 개를 찾았는지.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScanCheck {
     pub artifact: String,
     pub count: usize,
@@ -62,6 +95,9 @@ pub struct ScanCheck {
 pub struct Scan {
     #[serde(skip)]
     pub root: PathBuf,
+    /// 수집 사본 폴더 (실행 중 PC 점검일 때). 하이브·이벤트 로그는 여기서 먼저 찾는다.
+    #[serde(skip)]
+    pub overlay: Option<PathBuf>,
     pub items: Vec<FoundItem>,
     pub checks: Vec<ScanCheck>,
     pub issues: Vec<Issue>,
@@ -127,11 +163,48 @@ fn rel(root: &Path, path: &Path) -> String {
 
 /// 입력 폴더를 훑어 아티팩트 파일 목록을 만든다.
 pub fn scan(root: &Path) -> Result<Scan, ScanError> {
+    scan_with_overlay(root, None)
+}
+
+/// `overlay`가 있으면 레지스트리 하이브·이벤트 로그는 그 폴더(같은 폴더 구조)에서 먼저 찾는다.
+pub fn scan_with_overlay(root: &Path, overlay: Option<&Path>) -> Result<Scan, ScanError> {
     if !root.is_dir() {
         return Err(ScanError::InputNotFound);
     }
     let mut items: Vec<FoundItem> = Vec::new();
     let mut issues: Vec<Issue> = Vec::new();
+
+    // --- 레지스트리 하이브, 이벤트 로그 ---
+    for (artifact, parts) in SYSTEM_FILES {
+        let (dir_parts, file) = match parts.split_last() {
+            Some((f, d)) => (d, *f),
+            None => continue,
+        };
+        let mut found = None;
+        for base in overlay.into_iter().chain(std::iter::once(root)) {
+            if let Some(dir) = descend_ci(base, dir_parts) {
+                if let Some(f) = child_ci(&dir, file).filter(|e| !e.is_dir) {
+                    found = Some((base.to_path_buf(), f.path));
+                    break;
+                }
+            }
+        }
+        if let Some((base, path)) = found {
+            let from_overlay = overlay.is_some_and(|o| o == base);
+            items.push(FoundItem {
+                artifact: artifact.to_string(),
+                rel_path: if from_overlay {
+                    format!("[수집본]/{}", rel(&base, &path))
+                } else {
+                    rel(root, &path)
+                },
+                abs_path: path,
+                account: AccountRef::default(),
+                browser: None,
+                profile: None,
+            });
+        }
+    }
 
     // --- 휴지통: $Recycle.Bin\<SID>\$I* ---
     if let Some(bin) = descend_ci(root, &["$Recycle.Bin"]) {
@@ -225,7 +298,24 @@ pub fn scan(root: &Path) -> Result<Scan, ScanError> {
         })
         .collect();
 
-    Ok(Scan { root: root.to_path_buf(), items, checks, issues })
+    Ok(Scan { root: root.to_path_buf(), overlay: overlay.map(Path::to_path_buf), items, checks, issues })
+}
+
+/// 하이브 옆의 트랜잭션 로그 (.LOG1, .LOG2, 대소문자 무시).
+pub fn hive_logs(hive: &Path) -> Vec<PathBuf> {
+    let (Some(dir), Some(name)) = (hive.parent(), hive.file_name()) else { return Vec::new() };
+    let name = name.to_string_lossy().to_ascii_lowercase();
+    let mut v: Vec<PathBuf> = list_dir(dir)
+        .into_iter()
+        .filter(|e| !e.is_dir)
+        .filter(|e| {
+            let n = e.name.to_ascii_lowercase();
+            n == format!("{name}.log1") || n == format!("{name}.log2")
+        })
+        .map(|e| e.path)
+        .collect();
+    v.sort();
+    v
 }
 
 /// SQLite DB 옆에 있을 수 있는 보조 파일 이름들.
@@ -249,9 +339,16 @@ pub fn hash_inputs(scan: &Scan) -> BTreeMap<String, String> {
         if item.artifact == ARTIFACT_CHROMIUM || item.artifact == ARTIFACT_FIREFOX {
             paths.extend(sqlite_sidecars(&item.abs_path));
         }
+        if item.artifact == ARTIFACT_HIVE_SYSTEM || item.artifact == ARTIFACT_HIVE_SOFTWARE {
+            paths.extend(hive_logs(&item.abs_path));
+        }
         for p in paths {
             let value = hash::sha256_file(&p).unwrap_or_else(|e| format!("읽기 실패: {e}"));
-            out.insert(rel(&scan.root, &p), value);
+            let key = match &scan.overlay {
+                Some(o) if p.starts_with(o) => format!("[수집본]/{}", rel(o, &p)),
+                _ => rel(&scan.root, &p),
+            };
+            out.insert(key, value);
         }
     }
     out
@@ -275,7 +372,7 @@ pub fn is_inside(child: &Path, parent: &Path) -> bool {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
@@ -318,6 +415,17 @@ mod tests {
         assert_eq!(chrome.account.name.as_deref(), Some("Kim"));
         assert_eq!(chrome.browser.as_deref(), Some("Chrome"));
 
+        // 하이브: 수집본(overlay)에 있으면 그쪽을 쓴다.
+        touch(&root.join("Windows/System32/config/SYSTEM"));
+        let ov = temp_root("overlay");
+        touch(&ov.join("Windows/System32/config/SYSTEM"));
+        touch(&ov.join("Windows/System32/config/SYSTEM.LOG1"));
+        let s2 = scan_with_overlay(&root, Some(&ov)).unwrap();
+        let hive = s2.items.iter().find(|i| i.artifact == ARTIFACT_HIVE_SYSTEM).unwrap();
+        assert!(hive.abs_path.starts_with(&ov));
+        assert!(hive.rel_path.starts_with("[수집본]/"));
+        assert!(hash_inputs(&s2).keys().any(|k| k.ends_with("SYSTEM.LOG1")));
+
         // 해시에는 보조 파일(-wal)도 포함된다.
         let hashes = hash_inputs(&s);
         assert!(hashes.keys().any(|k| k.ends_with("History-wal")));
@@ -329,6 +437,7 @@ mod tests {
         let root = temp_root("empty");
         let s = scan(&root).unwrap();
         assert_eq!(s.checks.len(), ALL_ARTIFACTS.len());
+        assert_eq!(s.checks.len(), 10);
         assert!(s.checks.iter().all(|c| c.count == 0));
         assert!(matches!(scan(&root.join("nope")), Err(ScanError::InputNotFound)));
     }

@@ -8,6 +8,7 @@
 pub mod bytes;
 pub mod hash;
 pub mod model;
+pub mod settings;
 pub mod time;
 
 pub use model::*;

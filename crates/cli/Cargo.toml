@@ -15,6 +15,7 @@ st-i18n.workspace = true
 st-collect.workspace = true
 st-timeline.workspace = true
 st-report.workspace = true
+st-engine.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 encoding_rs.workspace = true
@@ -22,6 +23,7 @@ clap.workspace = true
 
 [dev-dependencies]
 rusqlite.workspace = true
+st-report.workspace = true
 serde_json.workspace = true
 
 [lints]

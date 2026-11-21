@@ -45,7 +45,7 @@ pub fn unix_micros_to_utc(micros: i64) -> Option<DateTime<Utc>> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 

@@ -56,6 +56,15 @@ pub fn t(lang: Lang, key: &str) -> String {
     catalog(lang).get(key).cloned().unwrap_or_else(|| key.to_string())
 }
 
+/// 문구 틀의 `{이름}`을 값으로 채운다. 없는 이름은 그대로 둔다.
+pub fn tf(lang: Lang, key: &str, params: &[(&str, &str)]) -> String {
+    let mut s = t(lang, key);
+    for (k, v) in params {
+        s = s.replace(&format!("{{{k}}}"), v);
+    }
+    s
+}
+
 fn weekday_key(w: Weekday) -> &'static str {
     match w {
         Weekday::Mon => "weekday.mon",
@@ -96,7 +105,7 @@ pub fn format_file_stamp(utc: DateTime<Utc>, tz: Tz) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use chrono::TimeZone;
@@ -135,6 +144,12 @@ mod tests {
             "2026.11.21.(토), 01:30:00"
         );
         assert_eq!(format_stamp(utc, chrono_tz::UTC, Lang::Ko), "2026.11.20.(금), 16:30:00");
+    }
+
+    #[test]
+    fn template_fill() {
+        assert_eq!(tf(Lang::En, "finding.R4.sentence", &[("time", "T"), ("minutes", "30"), ("count", "25")]),
+            "Starting T, 25 files were moved to the Recycle Bin within 30 minutes.");
     }
 
     #[test]

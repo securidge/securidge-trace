@@ -38,6 +38,7 @@ fn to_hex(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
