@@ -1,0 +1,20 @@
+[package]
+name = "st-report"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "결과 내보내기 (근거 JSON, 타임라인 CSV). HTML 보고서는 Phase 4."
+
+[dependencies]
+st-core.workspace = true
+st-collect.workspace = true
+st-timeline.workspace = true
+st-i18n.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+csv.workspace = true
+
+[lints]
+workspace = true

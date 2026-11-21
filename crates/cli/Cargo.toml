@@ -1,0 +1,28 @@
+[package]
+name = "st-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "명령줄 실행 파일 (테스트·자동화·전문가용). 화면(GUI)은 같은 엔진을 호출한다."
+
+[[bin]]
+name = "trace"
+path = "src/main.rs"
+
+[dependencies]
+st-core.workspace = true
+st-i18n.workspace = true
+st-collect.workspace = true
+st-timeline.workspace = true
+st-report.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+encoding_rs.workspace = true
+clap.workspace = true
+
+[dev-dependencies]
+rusqlite.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

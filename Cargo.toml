@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/i18n",
+    "crates/collect",
+    "crates/parsers",
+    "crates/timeline",
+    "crates/report",
+    "crates/cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+chrono-tz = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+rusqlite = { version = "0.43", features = ["bundled"] }
+encoding_rs = "0.8"
+csv = "1"
+clap = { version = "4", features = ["derive"] }
+
+st-core = { path = "crates/core" }
+st-i18n = { path = "crates/i18n" }
+st-collect = { path = "crates/collect" }
+st-parsers = { path = "crates/parsers" }
+st-timeline = { path = "crates/timeline" }
+st-report = { path = "crates/report" }
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

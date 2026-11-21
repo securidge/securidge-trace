@@ -1,0 +1,77 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # 1. 모든 OS에서 빌드·린트·단위 테스트
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo build --release -p st-cli
+      - if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: trace-exe-${{ matrix.os }}
+          path: target/release/trace.exe
+
+  # 2. Windows 가상 머신에서 실제 기록을 만들고, 도구 결과를 정답과 대조
+  windows-truth:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p st-cli
+
+      - name: 정답이 있는 실제 기록 만들기
+        shell: pwsh
+        run: ./ci/win-setup-truth.ps1 -TruthPath D:\st-truth.json -SampleDir D:\st-samples
+
+      - name: Securidge Trace로 C 드라이브 분석
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force D:\st-out | Out-Null
+          & .\target\release\trace.exe analyze --input C:\ --output D:\st-out --case "gha-${{ matrix.os }}" --analyst ci --lang ko
+          $code = $LASTEXITCODE
+          Write-Host "종료 코드: $code"
+          if ($code -ne 0 -and $code -ne 2) { exit 1 }
+          exit 0
+
+      - name: 정답과 대조
+        shell: pwsh
+        run: |
+          $dir = Get-ChildItem D:\st-out -Directory | Sort-Object Name | Select-Object -Last 1
+          python ci/verify_truth.py D:\st-truth.json $dir.FullName D:\st-summary.md
+          $code = $LASTEXITCODE
+          Get-Content D:\st-summary.md -Encoding utf8 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          exit $code
+
+      - name: 결과와 실제 샘플 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: truth-${{ matrix.os }}
+          path: |
+            D:\st-truth.json
+            D:\st-summary.md
+            D:\st-samples
+            D:\st-out

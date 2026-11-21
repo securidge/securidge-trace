@@ -1,0 +1,14 @@
+[package]
+name = "st-collect"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "입력 폴더를 훑어 아티팩트 파일을 찾는다 (오프라인 입력). 실행 중 PC 수집은 Phase 3."
+
+[dependencies]
+st-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

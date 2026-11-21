@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Chrome",
+    "family": "chromium",
+    "path_under_user": ["AppData", "Local", "Google", "Chrome", "User Data"],
+    "verified": false
+  },
+  {
+    "name": "Edge",
+    "family": "chromium",
+    "path_under_user": ["AppData", "Local", "Microsoft", "Edge", "User Data"],
+    "verified": false
+  },
+  {
+    "name": "Whale",
+    "family": "chromium",
+    "path_under_user": ["AppData", "Local", "Naver", "Naver Whale", "User Data"],
+    "verified": false
+  },
+  {
+    "name": "Firefox",
+    "family": "firefox",
+    "path_under_user": ["AppData", "Roaming", "Mozilla", "Firefox", "Profiles"],
+    "verified": false
+  }
+]
