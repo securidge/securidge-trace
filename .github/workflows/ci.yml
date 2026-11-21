@@ -65,13 +65,19 @@ jobs:
           Get-Content D:\st-summary.md -Encoding utf8 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
           exit $code
 
+      - name: 결과 모으기
+        if: always()
+        shell: pwsh
+        run: |
+          $dst = Join-Path $env:GITHUB_WORKSPACE 'st-artifacts'
+          New-Item -ItemType Directory -Force $dst | Out-Null
+          foreach ($p in 'D:\st-truth.json','D:\st-summary.md','D:\st-samples','D:\st-out') {
+            if (Test-Path $p) { Copy-Item -Recurse -Force $p $dst }
+          }
+
       - name: 결과와 실제 샘플 보관
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: truth-${{ matrix.os }}
-          path: |
-            D:\st-truth.json
-            D:\st-summary.md
-            D:\st-samples
-            D:\st-out
+          path: st-artifacts

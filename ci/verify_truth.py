@@ -42,6 +42,9 @@ def norm(p):
 
 
 def main():
+    # Windows 콘솔 기본 인코딩(cp1252)은 한글을 출력하지 못한다.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     truth = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8-sig"))
     out_dir = Path(sys.argv[2])
     summary_path = Path(sys.argv[3])
