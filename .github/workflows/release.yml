@@ -1,9 +1,13 @@
-# v로 시작하는 태그(예: v0.1.0)를 올리면 Windows용 배포 파일을 만들어 GitHub 릴리스에 올린다.
+# Windows용 배포 파일을 만들어 GitHub 릴리스에 올린다.
+# - `release` 브랜치에 올리면: Cargo.toml의 버전으로 태그(v<버전>)와 릴리스를 만든다.
+# - `v`로 시작하는 태그를 올려도 같은 일을 한다.
 name: release
 
 on:
   push:
+    branches: [release]
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -21,10 +25,21 @@ jobs:
       - run: cargo test --workspace
       - run: cargo build --release -p st-cli -p st-gui
 
+      - name: 버전 정하기
+        shell: pwsh
+        run: |
+          $m = Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' | Select-Object -First 1
+          $ver = "v" + $m.Matches[0].Groups[1].Value
+          if ("${{ github.ref_type }}" -eq "tag" -and "${{ github.ref_name }}" -ne $ver) {
+            throw "태그(${{ github.ref_name }})와 Cargo.toml 버전($ver)이 다릅니다."
+          }
+          "VERSION=$ver" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          Write-Host "버전: $ver"
+
       - name: 배포 파일 만들기
         shell: pwsh
         run: |
-          $ver = "${{ github.ref_name }}"
+          $ver = $env:VERSION
           $name = "SecuridgeTrace-$ver-windows-x64"
           $dir = Join-Path $pwd "out\$name"
           New-Item -ItemType Directory -Force $dir | Out-Null
@@ -42,7 +57,9 @@ jobs:
       - name: GitHub 릴리스에 올리기
         uses: softprops/action-gh-release@v2
         with:
-          name: Securidge Trace ${{ github.ref_name }}
+          tag_name: ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Securidge Trace ${{ env.VERSION }}
           body_path: dist/RELEASE_NOTES.md
           files: |
             ${{ env.ZIP }}
