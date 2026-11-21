@@ -64,6 +64,12 @@ def main():
         lo, hi = parse(t["time_min_utc"]) - SLACK, parse(t["time_max_utc"]) + SLACK
         return dt is not None and lo <= dt <= hi, f"{ev_time} (정답 범위 {lo.isoformat()} ~ {hi.isoformat()})"
 
+    # 정답 자체가 만들어지지 않았으면 "검사할 것이 없어서 통과"가 되지 않도록 막는다.
+    check("준비", "열람 정답 생성", len(truth.get("opened", [])) >= 2,
+          f"만들어진 열람 정답 {len(truth.get('opened', []))}개")
+    check("준비", "삭제 정답 생성", len(truth.get("deleted", [])) >= 2,
+          f"만들어진 삭제 정답 {len(truth.get('deleted', []))}개")
+
     # --- 바로 가기 ---
     opened = [e for e in events if e["kind"] == "FileOpened"]
     for t in truth.get("opened", []):

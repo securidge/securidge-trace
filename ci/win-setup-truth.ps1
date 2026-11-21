@@ -31,9 +31,45 @@ function Get-VolumeSerial([string]$Letter) {
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
+
 public static class StShell {
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     public static extern void SHAddToRecentDocs(uint uFlags, string pv);
+
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    class ShellLinkCoClass { }
+
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown),
+     Guid("000214F9-0000-0000-C000-000000000046")]
+    interface IShellLinkW {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder f, int cch, IntPtr fd, uint fl);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder n, int cch);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string n);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder d, int cch);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string d);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder a, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string a);
+        void GetHotkey(out short h);
+        void SetHotkey(short h);
+        void GetShowCmd(out int c);
+        void SetShowCmd(int c);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder p, int cch, out int i);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string p, int i);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string p, uint r);
+        void Resolve(IntPtr hwnd, uint fl);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string f);
+    }
+
+    // Windows 셸의 유니코드 링크 API로 바로 가기를 만든다 (탐색기와 같은 구성 요소).
+    public static void CreateLink(string target, string lnkPath) {
+        var link = (IShellLinkW)new ShellLinkCoClass();
+        link.SetPath(target);
+        ((IPersistFile)link).Save(lnkPath, true);
+    }
 }
 '@
 
@@ -60,13 +96,12 @@ function Register-Opened([string]$Path, [string]$Letter, [string]$Label) {
     $lnk = Join-Path $recent "$name.lnk"
     $method = 'SHAddToRecentDocs'
     if (-not (Test-Path -LiteralPath $lnk)) {
-        # 셸이 바로 가기를 만들지 않은 경우(서비스 세션 등): WScript.Shell로 직접 만든다.
-        $ws = New-Object -ComObject WScript.Shell
-        $sc = $ws.CreateShortcut($lnk)
-        $sc.TargetPath = $Path
-        $sc.Save()
+        # 셸이 바로 가기를 만들지 않은 경우(서버 Windows는 최근 문서 기록이 꺼져 있음):
+        # 같은 셸 구성 요소(IShellLinkW)로 Recent 폴더에 직접 만든다.
+        New-Item -ItemType Directory -Force -Path $recent | Out-Null
+        [StShell]::CreateLink($Path, $lnk)
         $after = UtcNow
-        $method = 'WScript.Shell.CreateShortcut (fallback)'
+        $method = 'IShellLinkW (fallback: SHAddToRecentDocs가 만들지 않음)'
     }
     Copy-Item -LiteralPath $lnk -Destination (Join-Path $SampleDir "$Label.lnk")
     $script:truth.opened += [ordered]@{
@@ -89,9 +124,14 @@ $f2 = Join-Path $docs 'memo_test.txt'
 Set-Content -LiteralPath $f1 -Value ('A' * 1234) -NoNewline -Encoding utf8NoBOM
 Set-Content -LiteralPath $f2 -Value ('B' * 77) -NoNewline -Encoding utf8NoBOM
 Start-Sleep -Seconds 2
-Register-Opened $f1 'C' 'opened_korean_c'
+function Try-Step([string]$Name, [scriptblock]$Body) {
+    try { & $Body } catch { $script:truth.notes += "$Name 실패: $($_.Exception.Message)"; Write-Warning "$Name 실패: $_" }
+}
+$policy = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer' -ErrorAction SilentlyContinue
+$truth.notes += "NoRecentDocsHistory 정책 값: $($policy.NoRecentDocsHistory)"
+Try-Step 'opened_korean_c' { Register-Opened $f1 'C' 'opened_korean_c' }
 Start-Sleep -Seconds 2
-Register-Opened $f2 'C' 'opened_ascii_c'
+Try-Step 'opened_ascii_c' { Register-Opened $f2 'C' 'opened_ascii_c' }
 
 # --- 2. 별도 볼륨 (VHD) ---
 try {
@@ -113,7 +153,7 @@ assign letter=T
     $f3 = 'T:\자료\usb문서_시험.txt'
     Set-Content -LiteralPath $f3 -Value ('C' * 4096) -NoNewline -Encoding utf8NoBOM
     Start-Sleep -Seconds 2
-    Register-Opened $f3 'T' 'opened_korean_t'
+    Try-Step 'opened_korean_t' { Register-Opened $f3 'T' 'opened_korean_t' }
 } catch {
     $truth.notes += "별도 볼륨 시험 건너뜀: $($_.Exception.Message)"
 }
@@ -136,9 +176,9 @@ $d2 = Join-Path $docs 'delete_me.bin'
 Set-Content -LiteralPath $d1 -Value ('D' * 5555) -NoNewline -Encoding utf8NoBOM
 [IO.File]::WriteAllBytes($d2, [byte[]](1..200 | ForEach-Object { [byte]($_ % 256) }))
 Start-Sleep -Seconds 2
-Send-ToBin $d1 'deleted_korean'
+Try-Step 'deleted_korean' { Send-ToBin $d1 'deleted_korean' }
 Start-Sleep -Seconds 2
-Send-ToBin $d2 'deleted_ascii'
+Try-Step 'deleted_ascii' { Send-ToBin $d2 'deleted_ascii' }
 
 # 만들어진 $I 파일을 샘플로 보관 (나중에 회귀 시험 데이터로 쓴다)
 $binDir = Join-Path 'C:\$Recycle.Bin' $truth.sid
