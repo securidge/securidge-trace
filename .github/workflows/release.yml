@@ -45,7 +45,8 @@ jobs:
           New-Item -ItemType Directory -Force $dir | Out-Null
           Copy-Item target\release\SecuridgeTrace.exe, target\release\trace.exe $dir
           Copy-Item dist\*.txt, LICENSE-MIT, LICENSE-APACHE $dir
-          python tools/third_party.py | Out-File -Encoding utf8 (Join-Path $dir 'THIRD-PARTY-LICENSES.txt')
+          python tools/third_party.py (Join-Path $dir 'THIRD-PARTY-LICENSES.txt')
+          if ($LASTEXITCODE -ne 0) { throw '외부 라이브러리 목록을 만들지 못함' }
           $zip = Join-Path $pwd "out\$name.zip"
           Compress-Archive -Path $dir -DestinationPath $zip -Force
           $h = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()

@@ -1,6 +1,6 @@
 """배포물에 들어가는 외부 라이브러리와 라이선스 목록을 만든다 (THIRD-PARTY-LICENSES.txt).
 
-사용: python3 tools/third_party.py > THIRD-PARTY-LICENSES.txt
+사용: python3 tools/third_party.py THIRD-PARTY-LICENSES.txt  (UTF-8로 쓴다)
 Windows 실행 파일(st-cli, st-gui)에 실제로 링크되는 의존성만 센다 (개발·빌드 전용 제외).
 """
 import json, subprocess, sys
@@ -21,10 +21,12 @@ while stack:
             stack.append(d["pkg"])
 rows = sorted((pk[i]["name"], pk[i]["version"], pk[i].get("license") or "(라이선스 파일 참고)", pk[i].get("repository") or "")
               for i in seen if pk[i]["source"])
-out = sys.stdout
+out = open(sys.argv[1], "w", encoding="utf-8", newline="\r\n") if len(sys.argv) > 1 else sys.stdout
 out.write("Securidge Trace — 포함된 외부 라이브러리 / Third-party libraries\n")
 out.write("각 라이브러리의 저작권과 라이선스 전문은 아래 저장소에서 확인할 수 있습니다.\n")
 out.write("Copyright and full license texts are available at each repository.\n\n")
 for name, ver, lic, repo in rows:
     out.write(f"{name} {ver}\n  License: {lic}\n  {repo}\n")
 out.write(f"\n총 {len(rows)}개 / {len(rows)} packages\n")
+if out is not sys.stdout:
+    out.close()
