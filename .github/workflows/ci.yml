@@ -65,6 +65,21 @@ jobs:
           Get-Content D:\st-summary.md -Encoding utf8 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
           exit $code
 
+      - name: 실제 샘플을 로그로 내보내기 (결과물 다운로드가 막힌 환경용)
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "--- Recent 폴더 목록 ---"
+          Get-ChildItem -Force ([Environment]::GetFolderPath('Recent')) | Select-Object Name, Length, LastWriteTimeUtc | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+          if (Test-Path D:\st-samples) {
+            Get-ChildItem D:\st-samples -File | ForEach-Object {
+              $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($_.FullName))
+              Write-Host "ST-SAMPLE-BEGIN $($_.Name)"
+              for ($i = 0; $i -lt $b64.Length; $i += 1000) { Write-Host $b64.Substring($i, [Math]::Min(1000, $b64.Length - $i)) }
+              Write-Host "ST-SAMPLE-END"
+            }
+          }
+
       - name: 결과 모으기
         if: always()
         shell: pwsh

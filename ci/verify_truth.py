@@ -57,7 +57,7 @@ def main():
 
     def check(group, label, ok, detail, hard=True):
         nonlocal hard_fail
-        verdict = "통과" if ok else ("실패" if hard else "참고")
+        verdict = ("통과" if hard else "참고") if ok else ("실패" if hard else "참고")
         if hard and not ok:
             hard_fail = True
         rows.append((group, label, verdict, detail))
@@ -76,9 +76,16 @@ def main():
     # --- 바로 가기 ---
     opened = [e for e in events if e["kind"] == "FileOpened"]
     for t in truth.get("opened", []):
-        match = [e for e in opened if norm(e["subject"]) == norm(t["target"])]
+        same_target = [e for e in opened if norm(e["subject"]) == norm(t["target"])]
+        # 정답 바로 가기 파일에서 나온 기록을 찾는다. 같은 대상을 가리키는 다른 바로 가기가
+        # 더 있을 수 있으므로(예: Windows가 따로 만든 것) 그 수는 참고로 보여준다.
+        lnk_name = t["lnk"].replace("\\", "/").split("/")[-1].lower()
+        match = [e for e in same_target if e["source"]["file"].lower().endswith("/" + lnk_name)]
+        others = sorted(e["source"]["file"] for e in same_target if e not in match)
         check("열람", t["label"], len(match) == 1,
-              f"대상 {t['target']} → 찾은 기록 {len(match)}개 (만든 방법: {t['method']})")
+              f"대상 {t['target']} → 정답 바로 가기의 기록 {len(match)}개 (만든 방법: {t['method']})")
+        check("열람", t["label"] + " 같은 대상의 다른 바로 가기", True,
+              f"{len(others)}개: {', '.join(others) or '없음'}", hard=False)
         if not match:
             continue
         e = match[0]
