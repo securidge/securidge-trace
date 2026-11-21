@@ -90,13 +90,21 @@ $recent = $truth.recent_dir
 function Register-Opened([string]$Path, [string]$Letter, [string]$Label) {
     $before = UtcNow
     [StShell]::SHAddToRecentDocs(3, $Path)   # 3 = SHARD_PATHW
-    Start-Sleep -Seconds 3
+    # 실측(Windows Server 2022/2025): 셸은 확장자를 뺀 이름(memo_test.lnk)으로 몇 초 뒤에 만든다.
+    $candidates = @(
+        (Join-Path $recent ([IO.Path]::GetFileNameWithoutExtension($Path) + '.lnk')),
+        (Join-Path $recent ([IO.Path]::GetFileName($Path) + '.lnk'))
+    )
+    $lnk = $null
+    for ($i = 0; $i -lt 20 -and -not $lnk; $i++) {
+        Start-Sleep -Milliseconds 500
+        $lnk = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    }
     $after = UtcNow
-    $name = [IO.Path]::GetFileName($Path)
-    $lnk = Join-Path $recent "$name.lnk"
-    $method = 'SHAddToRecentDocs'
-    if (-not (Test-Path -LiteralPath $lnk)) {
-        # 셸이 바로 가기를 만들지 않은 경우(서버 Windows는 최근 문서 기록이 꺼져 있음):
+    $method = 'SHAddToRecentDocs (Windows 셸이 생성)'
+    if (-not $lnk) {
+        $lnk = $candidates[1]
+        # 셸이 10초 안에 바로 가기를 만들지 않은 경우(정책으로 최근 문서 기록이 꺼진 PC 등):
         # 같은 셸 구성 요소(IShellLinkW)로 Recent 폴더에 직접 만든다.
         New-Item -ItemType Directory -Force -Path $recent | Out-Null
         [StShell]::CreateLink($Path, $lnk)

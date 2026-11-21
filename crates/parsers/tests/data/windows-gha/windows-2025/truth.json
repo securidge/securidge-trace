@@ -1,0 +1,76 @@
+{
+  "os": {
+    "Caption": "Microsoft Windows Server 2025 Datacenter",
+    "Version": "10.0.26100",
+    "BuildNumber": "26100"
+  },
+  "time_zone": "UTC",
+  "account": "runneradmin",
+  "sid": "S-1-5-21-3414932011-3134797172-3625386099-500",
+  "recent_dir": "C:\\Users\\runneradmin\\AppData\\Roaming\\Microsoft\\Windows\\Recent",
+  "opened": [
+    {
+      "label": "opened_korean_c",
+      "target": "C:\\Users\\runneradmin\\Documents\\시험문서\\견적서_시험.txt",
+      "size": 1234,
+      "volume_serial": "4CDA-EECE",
+      "lnk": "C:\\Users\\runneradmin\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\견적서_시험.txt.lnk",
+      "method": "IShellLinkW (fallback: SHAddToRecentDocs가 만들지 않음)",
+      "time_min_utc": "2026-11-21T10:01:14.4232609Z",
+      "time_max_utc": "2026-11-21T10:01:17.5007200Z"
+    },
+    {
+      "label": "opened_ascii_c",
+      "target": "C:\\Users\\runneradmin\\Documents\\시험문서\\memo_test.txt",
+      "size": 77,
+      "volume_serial": "4CDA-EECE",
+      "lnk": "C:\\Users\\runneradmin\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\memo_test.txt.lnk",
+      "method": "IShellLinkW (fallback: SHAddToRecentDocs가 만들지 않음)",
+      "time_min_utc": "2026-11-21T10:01:19.5927391Z",
+      "time_max_utc": "2026-11-21T10:01:22.6022957Z"
+    },
+    {
+      "label": "opened_korean_t",
+      "target": "T:\\자료\\usb문서_시험.txt",
+      "size": 4096,
+      "volume_serial": "9A44-6117",
+      "lnk": "C:\\Users\\runneradmin\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\usb문서_시험.txt.lnk",
+      "method": "IShellLinkW (fallback: SHAddToRecentDocs가 만들지 않음)",
+      "time_min_utc": "2026-11-21T10:01:29.6952899Z",
+      "time_max_utc": "2026-11-21T10:01:32.7170940Z"
+    }
+  ],
+  "deleted": [
+    {
+      "label": "deleted_korean",
+      "original_path": "C:\\Users\\runneradmin\\Documents\\시험문서\\계약서 초안_시험.txt",
+      "size": 5555,
+      "time_min_utc": "2026-11-21T10:01:34.7702801Z",
+      "time_max_utc": "2026-11-21T10:01:34.8351020Z"
+    },
+    {
+      "label": "deleted_ascii",
+      "original_path": "C:\\Users\\runneradmin\\Documents\\시험문서\\delete_me.bin",
+      "size": 200,
+      "time_min_utc": "2026-11-21T10:01:36.8382213Z",
+      "time_max_utc": "2026-11-21T10:01:36.8680541Z"
+    }
+  ],
+  "web": [
+    {
+      "browser": "Chrome",
+      "url": "https://example.com/?st_marker=chrome-8b183051",
+      "time_min_utc": "2026-11-21T10:01:36.8877313Z",
+      "time_max_utc": "2026-11-21T10:02:04.9280889Z"
+    },
+    {
+      "browser": "Edge",
+      "url": "https://example.com/?st_marker=edge-29ddf4a6",
+      "time_min_utc": "2026-11-21T10:02:04.9320419Z",
+      "time_max_utc": "2026-11-21T10:02:32.9476937Z"
+    }
+  ],
+  "notes": [
+    "NoRecentDocsHistory 정책 값: "
+  ]
+}
