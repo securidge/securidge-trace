@@ -76,6 +76,16 @@ pub enum EventKind {
     LogCleared,
     /// 시스템 시각이 바뀜
     TimeChanged,
+    /// 프로그램 실행 (Prefetch, BAM, UserAssist)
+    ProgramRun,
+    /// 실행 파일이 PC에 있었음 (Amcache. 실행했다는 뜻은 아님)
+    ProgramPresent,
+    /// 탐색기로 폴더를 열어 봄 (ShellBags)
+    FolderOpened,
+    /// 원격 데스크톱 접속 (로그온·인증·연결 끊김·다시 연결)
+    RemoteLogon,
+    /// 프로그램별 하루 네트워크 전송량 (SRUM)
+    NetworkUsage,
 }
 
 /// 이 사실이 어디에서 나왔는지.
@@ -125,6 +135,19 @@ impl Issue {
     pub fn is_note(&self) -> bool {
         self.reason.starts_with("참고:")
     }
+}
+
+/// 점검 시점에 PC에 연결돼 있던 드라이브 (실행 중인 PC 점검에서만 채운다).
+/// 장치 경로(`\Device\HarddiskVolume3`)와 볼륨 일련번호를 드라이브 문자로 바꾸는 데 쓴다.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriveInfo {
+    /// `C:`
+    pub letter: String,
+    /// `\Device\HarddiskVolume3`
+    pub device: String,
+    /// `1A2B-3C4D`
+    pub serial: Option<String>,
+    pub removable: bool,
 }
 
 /// 아티팩트별 데이터 범위 (개발 요청서 2장 7번: "기록 없음"과 "행위 없음"을 구분).

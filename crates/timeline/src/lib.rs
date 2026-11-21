@@ -15,20 +15,30 @@ use chrono::{DateTime, Utc};
 use encoding_rs::Encoding;
 use serde::{Deserialize, Serialize};
 use st_collect::{
-    sqlite_sidecars, FoundItem, Scan, ARTIFACT_CHROMIUM, ARTIFACT_EVTX_PARTITION,
-    ARTIFACT_EVTX_SECURITY, ARTIFACT_EVTX_SYSTEM, ARTIFACT_EVTX_WLAN, ARTIFACT_FIREFOX,
-    ARTIFACT_HIVE_SOFTWARE, ARTIFACT_HIVE_SYSTEM, ARTIFACT_LNK, ARTIFACT_RECYCLE_BIN,
+    sqlite_sidecars, FoundItem, Scan, ARTIFACT_CHROMIUM, ARTIFACT_EVTX_PARTITION, ARTIFACT_EVTX_RDP_AUTH,
+    ARTIFACT_EVTX_RDP_SESSION, ARTIFACT_EVTX_SECURITY, ARTIFACT_EVTX_SYSTEM, ARTIFACT_EVTX_WLAN, ARTIFACT_FIREFOX,
+    ARTIFACT_HIVE_AMCACHE, ARTIFACT_HIVE_NTUSER, ARTIFACT_HIVE_SOFTWARE, ARTIFACT_HIVE_SYSTEM, ARTIFACT_HIVE_USRCLASS,
+    ARTIFACT_JUMPLIST, ARTIFACT_LNK, ARTIFACT_PREFETCH, ARTIFACT_RECYCLE_BIN, ARTIFACT_SRUM,
 };
-use st_core::{AccountRef, Confidence, Coverage, Event, EventKind, Issue, SourceRef, Stamp, TimeBasis};
+use st_core::{AccountRef, Confidence, Coverage, DriveInfo, Event, EventKind, Issue, SourceRef, Stamp, TimeBasis};
 use st_parsers::hive::Hive;
-use st_parsers::registry::{self, Account, Device, DeviceKind, Network, SystemInfo};
-use st_parsers::{browser, eventlog, lnk, recyclebin};
+use st_parsers::registry::{self, Account, Network, SystemInfo};
+pub use st_parsers::registry::{Device, DeviceKind};
+use st_parsers::{browser, eventlog, jumplist, lnk, prefetch, recyclebin, srum, userhive};
 
 /// (가장 오래된 기록, 가장 최근 기록)
 type Range = (Option<DateTime<Utc>>, Option<DateTime<Utc>>);
 
 const MAX_INDEX_BYTES: u64 = 1024 * 1024;
 const MAX_LNK_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_PF_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_JUMPLIST_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_SRUM_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+/// 직접 만든 흔적 이름 (수집 파일과 1:1이 아닌 것). 자료별 범위 표에 따로 싣는다.
+pub const DERIVED_BAM: &str = "bam";
+pub const DERIVED_USERASSIST: &str = "userassist";
+pub const DERIVED_SHELLBAGS: &str = "shellbags";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Analysis {
@@ -46,6 +56,48 @@ pub struct Options<'a> {
     pub work_dir: &'a Path,
     /// 레지스트리에서 코드 페이지를 못 읽었을 때 쓸 값.
     pub fallback_ansi: &'static Encoding,
+    /// 점검 시점의 드라이브 정보 (실행 중인 PC 점검일 때만). 장치 경로를 드라이브 문자로 바꾼다.
+    pub drives: &'a [DriveInfo],
+}
+
+/// `\Device\HarddiskVolume3\…` → `C:\…` (아는 드라이브만).
+pub fn device_to_letter(path: &str, drives: &[DriveInfo]) -> String {
+    for d in drives {
+        if d.device.is_empty() {
+            continue;
+        }
+        let dev = d.device.trim_end_matches('\\');
+        if path.len() > dev.len()
+            && path.get(..dev.len()).is_some_and(|p| p.eq_ignore_ascii_case(dev))
+            && path.get(dev.len()..dev.len() + 1) == Some("\\")
+        {
+            return format!("{}{}", d.letter, path.get(dev.len()..).unwrap_or(""));
+        }
+    }
+    path.to_string()
+}
+
+/// Prefetch 안의 볼륨 경로(`\VOLUME{…-8c9f49ec}` 또는 `\DEVICE\HARDDISKVOLUME2`)를 바꾼다.
+fn pf_path(path: &str, pf: &prefetch::PrefetchInfo, drives: &[DriveInfo]) -> String {
+    let upper = path.to_ascii_uppercase();
+    for v in &pf.volumes {
+        let dev = v.device_path.to_ascii_uppercase();
+        if dev.is_empty() || !upper.starts_with(&dev) {
+            continue;
+        }
+        let rest = path.get(v.device_path.len()..).unwrap_or("");
+        if let Some(d) = drives.iter().find(|d| d.serial.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(&v.serial))) {
+            return format!("{}{rest}", d.letter);
+        }
+        if dev.starts_with("\\DEVICE\\") {
+            let converted = device_to_letter(path, drives);
+            if converted != path {
+                return converted;
+            }
+        }
+        return format!("[{}]{rest}", v.serial);
+    }
+    path.to_string()
 }
 
 /// 코드 페이지 번호 → 인코딩 (자주 쓰는 것만).
@@ -119,8 +171,66 @@ pub fn analyze(scan: &Scan, opts: &Options) -> Analysis {
 
     let ansi = system.ansi_codepage.and_then(encoding_for).unwrap_or(opts.fallback_ansi);
 
+    // --- 1-1. 실행 흔적 (BAM: SYSTEM, Amcache) ---
+    if let Some(item) = find(ARTIFACT_HIVE_SYSTEM) {
+        if let Ok(mut h) = Hive::open(&item.abs_path) {
+            let entries = userhive::bam(&mut h);
+            for b in entries {
+                let Some(t) = b.last_run else { continue };
+                let mut details = BTreeMap::new();
+                details.insert("device_path".to_string(), b.path.clone());
+                events.push(Event {
+                    time: Stamp::utc(Some(t), b.last_run_raw.to_string()),
+                    kind: EventKind::ProgramRun,
+                    subject: device_to_letter(&b.path, opts.drives),
+                    account: AccountRef { sid: Some(b.sid.clone()), name: None },
+                    details,
+                    source: SourceRef {
+                        artifact: DERIVED_BAM.to_string(),
+                        file: item.rel_path.clone(),
+                        record: format!("bam\\UserSettings\\{}", b.sid),
+                    },
+                    confidence: Confidence::High,
+                    caveats: vec!["프로그램별 마지막 실행 시각 하나만 남음. 약 1주일이 지난 항목은 Windows가 지움.".to_string()],
+                });
+            }
+        }
+    }
+    if let Some(item) = find(ARTIFACT_HIVE_AMCACHE) {
+        match Hive::open(&item.abs_path) {
+            Ok(mut h) => {
+                for f in userhive::amcache(&mut h) {
+                    let mut details = BTreeMap::new();
+                    for (k, v) in [("sha1", &f.sha1), ("size_bytes", &f.size), ("product", &f.product), ("publisher", &f.publisher), ("link_date", &f.link_date)] {
+                        if let Some(v) = v {
+                            details.insert(k.to_string(), v.clone());
+                        }
+                    }
+                    events.push(Event {
+                        time: Stamp::utc(Some(f.key_time), f.key_time.to_rfc3339()),
+                        kind: EventKind::ProgramPresent,
+                        subject: f.path,
+                        account: AccountRef::default(),
+                        details,
+                        source: source(item, "Root\\InventoryApplicationFile".to_string()),
+                        confidence: Confidence::Medium,
+                        caveats: vec!["이 파일이 PC에 있었다는 기록이며, 실행했다는 증거는 아님. 시각은 기록이 갱신된 무렵임.".to_string()],
+                    });
+                }
+            }
+            Err(e) => issues.push(issue(item, e)),
+        }
+    }
+
     // --- 2. 이벤트 로그 ---
-    for artifact in [ARTIFACT_EVTX_SECURITY, ARTIFACT_EVTX_SYSTEM, ARTIFACT_EVTX_PARTITION, ARTIFACT_EVTX_WLAN] {
+    for artifact in [
+        ARTIFACT_EVTX_SECURITY,
+        ARTIFACT_EVTX_SYSTEM,
+        ARTIFACT_EVTX_PARTITION,
+        ARTIFACT_EVTX_WLAN,
+        ARTIFACT_EVTX_RDP_SESSION,
+        ARTIFACT_EVTX_RDP_AUTH,
+    ] {
         let Some(item) = find(artifact) else { continue };
         match eventlog::read(&item.abs_path) {
             Ok(read) => {
@@ -144,6 +254,16 @@ pub fn analyze(scan: &Scan, opts: &Options) -> Analysis {
             ARTIFACT_RECYCLE_BIN => recycle_events(item),
             ARTIFACT_LNK => lnk_events(item, ansi),
             ARTIFACT_CHROMIUM | ARTIFACT_FIREFOX => browser_events(item, opts.work_dir, index),
+            ARTIFACT_PREFETCH => prefetch_events(item, opts.drives),
+            ARTIFACT_JUMPLIST => jumplist_events(item, ansi),
+            ARTIFACT_HIVE_NTUSER | ARTIFACT_HIVE_USRCLASS => user_hive_events(item),
+            ARTIFACT_SRUM => match srum_events(item, opts.drives) {
+                Ok((ev, notes, range)) => {
+                    extra_ranges.insert(ARTIFACT_SRUM.to_string(), range);
+                    Ok((ev, notes))
+                }
+                Err(e) => Err(e),
+            },
             _ => continue,
         };
         match result {
@@ -388,6 +508,38 @@ fn log_event(item: &FoundItem, le: &eventlog::LogEvent) -> Option<Event> {
             details.insert("ssid".to_string(), g("SSID"));
             (EventKind::WlanConnected, g("ProfileName"))
         }
+        ("security", 4624) => {
+            account.sid = le.data.get("TargetUserSid").cloned();
+            account.name = le.data.get("TargetUserName").cloned();
+            details.insert("action".to_string(), "logon".to_string());
+            details.insert("source_ip".to_string(), g("IpAddress"));
+            details.insert("workstation".to_string(), g("WorkstationName"));
+            let ip = g("IpAddress");
+            (EventKind::RemoteLogon, if ip.is_empty() || ip == "-" { g("WorkstationName") } else { ip })
+        }
+        (c, 21 | 24 | 25) if c.contains("localsessionmanager") => {
+            let addr = le.data.iter().find(|(k, _)| k.ends_with("Address")).map(|(_, v)| v.clone()).unwrap_or_default();
+            if addr.is_empty() || addr.eq_ignore_ascii_case("LOCAL") {
+                return None;
+            }
+            let user = le.data.iter().find(|(k, _)| k.ends_with(".User") || k.as_str() == "User").map(|(_, v)| v.clone());
+            account.name = user.map(|u| u.rsplit('\\').next().unwrap_or("").to_string());
+            let action = match le.event_id {
+                21 => "logon",
+                24 => "disconnect",
+                _ => "reconnect",
+            };
+            details.insert("action".to_string(), action.to_string());
+            details.insert("source_ip".to_string(), addr.clone());
+            (EventKind::RemoteLogon, addr)
+        }
+        (c, 1149) if c.contains("remoteconnectionmanager") => {
+            let p = |n: &str| le.data.iter().find(|(k, _)| k.ends_with(n)).map(|(_, v)| v.clone()).unwrap_or_default();
+            account.name = Some(p("Param1")).filter(|x| !x.is_empty());
+            details.insert("action".to_string(), "auth".to_string());
+            details.insert("source_ip".to_string(), p("Param3"));
+            (EventKind::RemoteLogon, p("Param3"))
+        }
         (c, 8003) if c.contains("wlan") => {
             details.insert("ssid".to_string(), g("SSID"));
             details.insert("reason".to_string(), g("Reason"));
@@ -476,6 +628,185 @@ fn lnk_events(item: &FoundItem, ansi: &'static Encoding) -> Result<EventsAndNote
         ],
     };
     Ok((vec![ev], Vec::new()))
+}
+
+fn prefetch_events(item: &FoundItem, drives: &[DriveInfo]) -> Result<EventsAndNotes, String> {
+    let data = read_limited(&item.abs_path, MAX_PF_BYTES)?;
+    let pf = prefetch::parse(&data).map_err(|e| e.to_string())?;
+    let exe_path = pf.executable_path.as_deref().map(|p| pf_path(p, &pf, drives));
+    let subject = exe_path.clone().unwrap_or_else(|| pf.executable.clone());
+    let vol = pf.executable_volume().cloned();
+    let mut out = Vec::new();
+    for (n, (t, raw)) in pf.last_runs.iter().zip(pf.last_runs_raw.iter()).enumerate() {
+        let mut details = BTreeMap::new();
+        details.insert("program".to_string(), pf.executable.clone());
+        details.insert("run_count".to_string(), pf.run_count.to_string());
+        details.insert("run_rank".to_string(), (n + 1).to_string());
+        details.insert("prefetch_hash".to_string(), pf.hash.clone());
+        if let Some(v) = &vol {
+            details.insert("volume_serial".to_string(), v.serial.clone());
+            if let Some(d) = drives.iter().find(|d| d.serial.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(&v.serial))) {
+                if d.removable {
+                    details.insert("drive_type".to_string(), "removable".to_string());
+                }
+            }
+        }
+        let mut caveats = Vec::new();
+        if n > 0 {
+            caveats.push("최근 8번까지의 실행 시각 중 하나임.".to_string());
+        }
+        out.push(Event {
+            time: Stamp::utc(Some(*t), raw.to_string()),
+            kind: EventKind::ProgramRun,
+            subject: subject.clone(),
+            account: AccountRef::default(),
+            details,
+            source: source(item, format!("LastRunTime[{n}]")),
+            confidence: Confidence::High,
+            caveats,
+        });
+    }
+    let notes = if out.is_empty() { vec!["참고: 실행 시각이 없는 Prefetch 파일".to_string()] } else { Vec::new() };
+    Ok((out, notes))
+}
+
+fn jumplist_events(item: &FoundItem, ansi: &'static Encoding) -> Result<EventsAndNotes, String> {
+    let data = read_limited(&item.abs_path, MAX_JUMPLIST_BYTES)?;
+    let file_name = item.abs_path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let app_id = jumplist::app_id_from_file_name(&file_name);
+    let custom = file_name.to_ascii_lowercase().ends_with(".customdestinations-ms");
+    let list = if custom {
+        jumplist::parse_custom(&data, &app_id, ansi)?
+    } else {
+        jumplist::parse_automatic(&data, &app_id, ansi)?
+    };
+    let file_time: Option<DateTime<Utc>> =
+        fs::metadata(&item.abs_path).ok().and_then(|m| m.modified().ok()).and_then(system_time_to_utc);
+    let app = list.app_name.clone().unwrap_or_else(|| format!("AppID {app_id}"));
+    let mut out = Vec::new();
+    for e in &list.entries {
+        if e.path.is_empty() {
+            continue;
+        }
+        let mut details = BTreeMap::new();
+        details.insert("app".to_string(), app.clone());
+        if let Some(v) = &e.drive_type {
+            details.insert("drive_type".to_string(), v.clone());
+        }
+        if let Some(v) = &e.volume_serial {
+            details.insert("volume_serial".to_string(), v.clone());
+        }
+        if let Some(v) = &e.volume_label {
+            details.insert("volume_label".to_string(), v.clone());
+        }
+        if let Some(v) = e.interaction_count {
+            details.insert("use_count".to_string(), v.to_string());
+        }
+        if e.pinned {
+            details.insert("pinned".to_string(), "true".to_string());
+        }
+        if !e.hostname.is_empty() {
+            details.insert("hostname".to_string(), e.hostname.clone());
+        }
+        let (time, confidence, caveats) = if custom {
+            (
+                Stamp::file_system(file_time, iso(file_time)),
+                Confidence::Low,
+                vec!["프로그램이 만든 목록이라 항목별 시각이 없음. 목록 파일의 수정 시각임.".to_string()],
+            )
+        } else {
+            (
+                Stamp::utc(e.last_used, e.last_used_raw.to_string()),
+                Confidence::High,
+                vec!["파일을 '열었다'는 흔적이며 '복사했다'는 증거가 아님.".to_string()],
+            )
+        };
+        out.push(Event {
+            time,
+            kind: EventKind::FileOpened,
+            subject: e.path.clone(),
+            account: item.account.clone(),
+            details,
+            source: source(item, format!("DestList#{}", e.entry_number)),
+            confidence,
+            caveats,
+        });
+    }
+    let notes = list.notes.iter().map(|n| format!("참고: {n}")).collect();
+    Ok((out, notes))
+}
+
+fn user_hive_events(item: &FoundItem) -> Result<EventsAndNotes, String> {
+    let mut h = Hive::open(&item.abs_path)?;
+    let mut out = Vec::new();
+    if item.artifact == ARTIFACT_HIVE_NTUSER {
+        for u in userhive::user_assist(&mut h) {
+            let Some(t) = u.last_run else { continue };
+            let mut details = BTreeMap::new();
+            details.insert("run_count".to_string(), u.run_count.to_string());
+            details.insert("focus_seconds".to_string(), u.focus_seconds.to_string());
+            out.push(Event {
+                time: Stamp::utc(Some(t), u.last_run_raw.to_string()),
+                kind: EventKind::ProgramRun,
+                subject: u.path,
+                account: item.account.clone(),
+                details,
+                source: SourceRef { artifact: DERIVED_USERASSIST.to_string(), file: item.rel_path.clone(), record: "UserAssist".to_string() },
+                confidence: Confidence::High,
+                caveats: vec!["탐색기·시작 메뉴로 실행한 것만 남음.".to_string()],
+            });
+        }
+    }
+    for b in userhive::shellbags(&mut h) {
+        let mut details = BTreeMap::new();
+        details.insert("root".to_string(), b.root.clone());
+        for (k, v) in [("folder_created_utc", b.created), ("folder_accessed_utc", b.accessed), ("folder_modified_utc", b.modified)] {
+            if v.is_some() {
+                details.insert(k.to_string(), iso(v));
+            }
+        }
+        let has_time = b.last_interacted.is_some();
+        out.push(Event {
+            time: Stamp::utc(b.last_interacted, iso(b.last_interacted)),
+            kind: EventKind::FolderOpened,
+            subject: b.path,
+            account: item.account.clone(),
+            details,
+            source: SourceRef { artifact: DERIVED_SHELLBAGS.to_string(), file: item.rel_path.clone(), record: b.key_path },
+            confidence: if has_time { Confidence::Medium } else { Confidence::Low },
+            caveats: vec![if has_time {
+                "시각은 '이 폴더를 마지막으로 다룬 무렵'임.".to_string()
+            } else {
+                "폴더를 연 적은 있으나 시각은 남아 있지 않음.".to_string()
+            }],
+        });
+    }
+    Ok((out, Vec::new()))
+}
+
+fn srum_events(item: &FoundItem, drives: &[DriveInfo]) -> Result<(Vec<Event>, Vec<String>, Range), String> {
+    let data = read_limited(&item.abs_path, MAX_SRUM_BYTES)?;
+    let read = srum::read(&data)?;
+    let mut out = Vec::new();
+    for u in read.usage {
+        let mut details = BTreeMap::new();
+        details.insert("bytes_sent".to_string(), u.bytes_sent.to_string());
+        details.insert("bytes_received".to_string(), u.bytes_received.to_string());
+        details.insert("day_utc".to_string(), u.day.to_string());
+        details.insert("records".to_string(), u.records.to_string());
+        let subject = device_to_letter(&u.app, drives);
+        out.push(Event {
+            time: Stamp::utc(u.last_record, iso(u.last_record)),
+            kind: EventKind::NetworkUsage,
+            subject,
+            account: AccountRef { sid: u.user_sid.clone(), name: None },
+            details,
+            source: source(item, format!("NetworkUsage {}", u.day)),
+            confidence: Confidence::High,
+            caveats: vec!["보낸 양만 알 수 있고, 무엇을 보냈는지는 알 수 없음.".to_string()],
+        });
+    }
+    Ok((out, read.notes, (read.earliest, read.latest)))
 }
 
 fn system_time_to_utc(t: SystemTime) -> Option<DateTime<Utc>> {
@@ -568,7 +899,19 @@ fn coverage(
     events: &[Event],
     extra: &BTreeMap<String, Range>,
 ) -> Vec<Coverage> {
-    scan.checks
+    let count = |a: &str| scan.checks.iter().find(|c| c.artifact == a).map_or(0, |c| c.count);
+    let derived = [
+        (DERIVED_BAM, count(ARTIFACT_HIVE_SYSTEM)),
+        (DERIVED_USERASSIST, count(ARTIFACT_HIVE_NTUSER)),
+        (DERIVED_SHELLBAGS, count(ARTIFACT_HIVE_NTUSER) + count(ARTIFACT_HIVE_USRCLASS)),
+    ];
+    let checks: Vec<st_collect::ScanCheck> = scan
+        .checks
+        .iter()
+        .cloned()
+        .chain(derived.iter().map(|(a, n)| st_collect::ScanCheck { artifact: (*a).to_string(), count: *n }))
+        .collect();
+    checks
         .iter()
         .map(|check| {
             let times: Vec<DateTime<Utc>> = events

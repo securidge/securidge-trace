@@ -163,6 +163,30 @@ impl Key {
         }
     }
 
+    /// 모든 값 (이름, 바이트). 바이트가 아닌 값은 건너뛴다.
+    pub fn binary_values(&self) -> Vec<(String, Vec<u8>)> {
+        self.node
+            .value_iter()
+            .filter_map(|v| match v.get_content().0 {
+                CellValue::Binary(b) => Some((v.get_pretty_name(), b)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// 문자열·숫자 값을 문자열로 (값 종류를 가리지 않고 읽을 때).
+    pub fn text(&self, name: &str) -> Option<String> {
+        match self.raw(name)? {
+            CellValue::String(s) => Some(s.trim_end_matches('\0').to_string()),
+            CellValue::MultiString(v) => v.into_iter().next(),
+            CellValue::U32(v) => Some(v.to_string()),
+            CellValue::I32(v) => Some(v.to_string()),
+            CellValue::U64(v) => Some(v.to_string()),
+            CellValue::I64(v) => Some(v.to_string()),
+            _ => None,
+        }
+    }
+
     /// 값 이름 목록.
     pub fn value_names(&self) -> Vec<String> {
         self.node.value_iter().map(|v| v.get_pretty_name()).collect()

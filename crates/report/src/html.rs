@@ -128,6 +128,10 @@ pub fn finding_sentence(f: &Finding, lang: Lang, tz: Tz) -> String {
             ("log", &g("log")),
             ("account_part", &account_part),
             ("sites", &g("sites")),
+            ("program", &g("program")),
+            ("ip", &g("ip")),
+            ("size", &g("size")),
+            ("day", &g("day")),
         ],
     )
 }
@@ -340,6 +344,15 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
         }
         h.push_str("</table>");
     }
+
+    // 실행한 프로그램
+    render_programs(&mut h, &c);
+    // 원격 접속
+    render_remote(&mut h, &c);
+    // 전송량
+    render_transfer(&mut h, &c);
+    // 이동식·네트워크·휴대 장치의 폴더
+    render_folders(&mut h, &c);
 
     // 시간순 기록 (최근 것부터 TIMELINE_LIMIT건, 번호는 근거 번호와 같다)
     let _ = write!(
@@ -592,7 +605,7 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
 
     // 용어·한계
     let _ = write!(h, "<h3>{}</h3><ul>", esc(&c.t("report.glossary")));
-    for k in ["gloss.1", "gloss.2", "gloss.3", "gloss.4"] {
+    for k in ["gloss.1", "gloss.2", "gloss.3", "gloss.4", "gloss.5", "gloss.6", "gloss.7", "gloss.8"] {
         let _ = write!(h, "<li>{}</li>", esc(&c.t(k)));
     }
     let _ = write!(h, "</ul><h3>{}</h3><ul>", esc(&c.t("report.limits")));
@@ -603,11 +616,222 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
     h
 }
 
+const SECTION_LIMIT: usize = 100;
+
+fn base_of(path: &str) -> &str {
+    path.rsplit(['\\', '/']).next().unwrap_or(path)
+}
+
+fn render_programs(h: &mut String, c: &Ctx) {
+    use st_core::EventKind;
+    let a = &c.case.analysis;
+    let flagged: std::collections::BTreeSet<usize> = c
+        .case
+        .assessment
+        .findings
+        .iter()
+        .filter(|f| f.rule_id == "R9")
+        .flat_map(|f| f.evidence.iter().copied())
+        .collect();
+    struct Row {
+        path: String,
+        last: Option<DateTime<Utc>>,
+        runs: u64,
+        sources: std::collections::BTreeSet<String>,
+        removable: bool,
+    }
+    let mut rows: BTreeMap<String, Row> = BTreeMap::new();
+    for (i, e) in a.events.iter().enumerate() {
+        if e.kind != EventKind::ProgramRun {
+            continue;
+        }
+        let key = e.subject.to_lowercase();
+        let r = rows.entry(key).or_insert_with(|| Row {
+            path: e.subject.clone(),
+            last: None,
+            runs: 0,
+            sources: Default::default(),
+            removable: false,
+        });
+        if e.time.utc > r.last {
+            r.last = e.time.utc;
+        }
+        if let Some(n) = e.details.get("run_count").and_then(|v| v.parse::<u64>().ok()) {
+            r.runs = r.runs.max(n);
+        }
+        r.sources.insert(c.t(&format!("artifact.{}", e.source.artifact)).split('(').nth(1).map(|x| x.trim_end_matches(')').to_string()).unwrap_or_else(|| e.source.artifact.clone()));
+        if flagged.contains(&i) {
+            r.removable = true;
+        }
+    }
+    if rows.is_empty() {
+        return;
+    }
+    let mut list: Vec<Row> = rows.into_values().collect();
+    list.sort_by(|x, y| y.removable.cmp(&x.removable).then(y.last.cmp(&x.last)));
+    let _ = write!(
+        h,
+        "<h3>{}</h3><p class=\"note\">{}</p><table class=\"tl\"><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>",
+        esc(&c.t("report.programs")),
+        esc(&tf(c.lang, "report.programs_note", &[("limit", &SECTION_LIMIT.to_string())])),
+        esc(&c.t("col.last")),
+        esc(&c.t("col.program")),
+        esc(&c.t("col.runs")),
+        esc(&c.t("col.evidence"))
+    );
+    for r in list.iter().take(SECTION_LIMIT) {
+        let flag = if r.removable { format!(" <span class=\"lv lv-Medium\">{}</span>", esc(&c.t("col.from_removable"))) } else { String::new() };
+        let _ = write!(
+            h,
+            "<tr><td>{}</td><td><b>{}</b>{flag}<div class=\"note\">{}</div></td><td>{}</td><td>{}</td></tr>",
+            esc(&c.when(r.last)),
+            esc(base_of(&r.path)),
+            esc(&c.subject(&r.path)),
+            if r.runs > 0 { r.runs.to_string() } else { "-".into() },
+            esc(&r.sources.iter().cloned().collect::<Vec<_>>().join(", "))
+        );
+    }
+    h.push_str("</table>");
+}
+
+fn render_remote(h: &mut String, c: &Ctx) {
+    use st_core::EventKind;
+    let mut ev: Vec<&Event> = c.case.analysis.events.iter().filter(|e| e.kind == EventKind::RemoteLogon).collect();
+    if ev.is_empty() {
+        return;
+    }
+    ev.sort_by(|x, y| y.time.utc.cmp(&x.time.utc));
+    let _ = write!(
+        h,
+        "<h3>{}</h3><table class=\"tl\"><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>",
+        esc(&c.t("report.remote")),
+        esc(&c.t("col.time")),
+        esc(&c.t("col.action")),
+        esc(&c.t("col.ip")),
+        esc(&c.t("col.account"))
+    );
+    for e in ev.iter().take(SECTION_LIMIT) {
+        let action = e.details.get("action").map(|a| c.t(&format!("action.{a}"))).unwrap_or_default();
+        let _ = write!(
+            h,
+            "<tr><td>{}</td><td>{}</td><td class=\"mono\">{}</td><td>{}</td></tr>",
+            esc(&c.when(e.time.utc)),
+            esc(&action),
+            esc(e.details.get("source_ip").map(String::as_str).unwrap_or("-")),
+            esc(&c.account(e.account.name.as_deref().or(e.account.sid.as_deref()).unwrap_or("")))
+        );
+    }
+    h.push_str("</table>");
+}
+
+fn render_transfer(h: &mut String, c: &Ctx) {
+    use st_core::EventKind;
+    let mut sums: BTreeMap<String, (u64, u64)> = BTreeMap::new();
+    for e in c.case.analysis.events.iter().filter(|e| e.kind == EventKind::NetworkUsage) {
+        let s = e.details.get("bytes_sent").and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        let r = e.details.get("bytes_received").and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        let x = sums.entry(e.subject.clone()).or_insert((0, 0));
+        x.0 = x.0.saturating_add(s);
+        x.1 = x.1.saturating_add(r);
+    }
+    if sums.is_empty() {
+        return;
+    }
+    let mut list: Vec<(String, (u64, u64))> = sums.into_iter().collect();
+    list.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
+    const TOP: usize = 15;
+    let max = list.first().map(|x| x.1 .0).unwrap_or(1).max(1);
+    let _ = write!(
+        h,
+        "<h3>{}</h3><p class=\"note\">{}</p><table><tr><th>{}</th><th>{}</th><th>{}</th></tr>",
+        esc(&c.t("report.transfer")),
+        esc(&tf(c.lang, "report.transfer_note", &[("limit", &TOP.to_string())])),
+        esc(&c.t("col.program")),
+        esc(&c.t("col.sent")),
+        esc(&c.t("col.received"))
+    );
+    for (app, (sent, recv)) in list.iter().take(TOP) {
+        let pct = (*sent as f64 / max as f64 * 100.0).round();
+        let _ = write!(
+            h,
+            "<tr><td><b>{}</b><div class=\"note\">{}</div></td><td style=\"width:34%\"><div class=\"bar\"><span style=\"width:{pct}%\"></span></div>{}</td><td>{}</td></tr>",
+            esc(base_of(app)),
+            esc(&c.subject(app)),
+            esc(&bytes_text(*sent)),
+            esc(&bytes_text(*recv))
+        );
+    }
+    h.push_str("</table>");
+}
+
+fn bytes_text(b: u64) -> String {
+    let mb = b as f64 / 1_048_576.0;
+    if mb >= 1024.0 {
+        format!("{:.1} GB", mb / 1024.0)
+    } else if mb >= 1.0 {
+        format!("{mb:.0} MB")
+    } else {
+        format!("{} KB", b / 1024)
+    }
+}
+
+fn render_folders(h: &mut String, c: &Ctx) {
+    use st_core::EventKind;
+    let interesting = |e: &&Event| -> bool {
+        if e.kind != EventKind::FolderOpened {
+            return false;
+        }
+        let s = e.subject.as_str();
+        let letter = s.get(..2).map(str::to_ascii_uppercase).unwrap_or_default();
+        s.starts_with("\\\\")
+            || (letter.ends_with(':') && letter != "C:")
+            || e.details.get("root").is_some_and(|r| r == "Other" || r == "Network")
+    };
+    let mut ev: Vec<&Event> = c.case.analysis.events.iter().filter(interesting).collect();
+    if ev.is_empty() {
+        return;
+    }
+    ev.sort_by(|x, y| y.time.utc.cmp(&x.time.utc).then(x.subject.cmp(&y.subject)));
+    let _ = write!(
+        h,
+        "<h3>{}</h3><table class=\"tl\"><tr><th>{}</th><th>{}</th><th>{}</th></tr>",
+        esc(&c.t("report.folders")),
+        esc(&c.t("col.time")),
+        esc(&c.t("col.folder")),
+        esc(&c.t("col.account"))
+    );
+    for e in ev.iter().take(SECTION_LIMIT) {
+        let _ = write!(
+            h,
+            "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
+            esc(&c.when(e.time.utc)),
+            esc(&c.subject(&e.subject)),
+            esc(&c.account(e.account.name.as_deref().unwrap_or("")))
+        );
+    }
+    h.push_str("</table>");
+}
+
 /// 시간순 기록 칸에 덧붙일 짧은 정보.
 fn event_extra(e: &Event, c: &Ctx) -> String {
     let d: &BTreeMap<String, String> = &e.details;
     let mut parts = Vec::new();
-    for k in ["drive_type", "volume_serial", "device_serial", "medium", "browser", "previous_time", "new_time", "by_user", "size_bytes"] {
+    for k in [
+        "drive_type",
+        "volume_serial",
+        "device_serial",
+        "medium",
+        "browser",
+        "app",
+        "run_count",
+        "source_ip",
+        "action",
+        "previous_time",
+        "new_time",
+        "by_user",
+        "size_bytes",
+        "sha1",
+    ] {
         if let Some(v) = d.get(k).filter(|v| !v.is_empty()) {
             let v = if k.ends_with("_time") { c.when_str(v) } else { v.clone() };
             let v = if k == "by_user" { c.account(&v) } else { v };

@@ -78,6 +78,19 @@ pub struct RuleConfig {
     pub webmail_domains: Vec<String>,
     /// 주소 분류표: 파일 공유·전송
     pub file_share_domains: Vec<String>,
+    /// R9 이동식 저장장치에서 프로그램 실행
+    pub program_from_removable: bool,
+    /// R10 흔적 지우기·완전 삭제 프로그램 실행
+    pub cleanup_tools: bool,
+    pub cleanup_tool_names: Vec<String>,
+    /// R11 원격 데스크톱 접속
+    pub remote_logon: bool,
+    /// R12 하루 전송량이 이 값(MB) 이상인 프로그램
+    pub large_upload: bool,
+    pub large_upload_mb: u32,
+    /// R13 원격 제어 프로그램 실행
+    pub remote_tools: bool,
+    pub remote_tool_names: Vec<String>,
 }
 
 impl Default for RuleConfig {
@@ -125,6 +138,41 @@ impl Default for RuleConfig {
                 "transfer.sh",
                 "filemail.com",
                 "gofile.io",
+            ]),
+            program_from_removable: true,
+            cleanup_tools: true,
+            cleanup_tool_names: v(&[
+                "ccleaner.exe",
+                "ccleaner64.exe",
+                "bleachbit.exe",
+                "bleachbit_console.exe",
+                "eraser.exe",
+                "eraserl.exe",
+                "sdelete.exe",
+                "sdelete64.exe",
+                "privazer.exe",
+                "hardwipe.exe",
+                "fileshredder.exe",
+            ]),
+            remote_logon: true,
+            large_upload: true,
+            large_upload_mb: 500,
+            remote_tools: true,
+            remote_tool_names: v(&[
+                "anydesk.exe",
+                "teamviewer.exe",
+                "teamviewer_service.exe",
+                "rustdesk.exe",
+                "remoting_host.exe",
+                "rutserv.exe",
+                "rfusclient.exe",
+                "ammyy_admin.exe",
+                "aa_v3.exe",
+                "splashtopstreamer.exe",
+                "strwinclt.exe",
+                "logmein.exe",
+                "screenconnect.windowsclient.exe",
+                "parsecd.exe",
             ]),
         }
     }

@@ -14,7 +14,7 @@ use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use st_core::settings::{Customer, RuleConfig};
-use st_core::{Event, EventKind};
+use st_core::{DriveInfo, Event, EventKind};
 use st_timeline::Analysis;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -111,6 +111,8 @@ pub struct Context<'a> {
     pub period_start: Option<DateTime<Utc>>,
     pub period_end: Option<DateTime<Utc>>,
     pub tool_media: &'a ToolMedia,
+    /// 점검 시점의 드라이브 (이동식 드라이브 문자 판단용). 모르면 빈 목록.
+    pub drives: &'a [DriveInfo],
 }
 
 impl Context<'_> {
@@ -145,6 +147,37 @@ fn domain_match(host: &str, list: &[String]) -> bool {
         let d = d.trim().to_ascii_lowercase();
         !d.is_empty() && (host == d || host.ends_with(&format!(".{d}")))
     })
+}
+
+/// 경로의 마지막 부분(파일 이름)을 소문자로.
+fn base_name(path: &str) -> String {
+    path.rsplit(['\\', '/']).next().unwrap_or(path).to_ascii_lowercase()
+}
+
+/// 사설·예약 주소인가 (회사 안 접속으로 본다).
+fn private_ip(ip: &str) -> bool {
+    let ip = ip.trim();
+    if ip.is_empty() || ip == "-" || ip == "127.0.0.1" || ip == "::1" || ip.eq_ignore_ascii_case("LOCAL") {
+        return true;
+    }
+    if let Ok(v4) = ip.parse::<std::net::Ipv4Addr>() {
+        return v4.is_private() || v4.is_loopback() || v4.is_link_local() || v4.is_unspecified();
+    }
+    if let Ok(v6) = ip.parse::<std::net::Ipv6Addr>() {
+        let first = v6.segments().first().copied().unwrap_or(0);
+        return v6.is_loopback() || v6.is_unspecified() || (first & 0xfe00) == 0xfc00 || (first & 0xffc0) == 0xfe80;
+    }
+    false
+}
+
+fn human_bytes(b: u64) -> String {
+    const MB: f64 = 1024.0 * 1024.0;
+    let mb = b as f64 / MB;
+    if mb >= 1024.0 {
+        format!("{:.1} GB", mb / 1024.0)
+    } else {
+        format!("{mb:.0} MB")
+    }
 }
 
 fn fmt_time(t: Option<DateTime<Utc>>) -> String {
@@ -414,6 +447,169 @@ pub fn assess(a: &Analysis, ctx: &Context) -> Assessment {
         }
     }
 
+    // --- 이동식 볼륨·드라이브 (R9용) ---
+    let mut removable_vsn: BTreeSet<String> = BTreeSet::new();
+    for e in ev {
+        let is_removable = e.kind == EventKind::StorageAttached
+            || (e.kind == EventKind::FileOpened && detail(e, "drive_type") == Some("removable"));
+        if is_removable {
+            if let Some(v) = detail(e, "volume_serial").filter(|v| !v.is_empty()) {
+                removable_vsn.insert(v.to_ascii_uppercase());
+            }
+        }
+    }
+    let mut removable_letters: BTreeSet<String> = ctx
+        .drives
+        .iter()
+        .filter(|d| d.removable)
+        .map(|d| d.letter.to_ascii_uppercase())
+        .collect();
+    for d in &a.devices {
+        if d.kind == st_timeline::DeviceKind::UsbStorage {
+            for l in &d.drive_letters {
+                removable_letters.insert(l.trim_end_matches('\\').to_ascii_uppercase());
+            }
+        }
+    }
+    let system_letter = ctx.drives.iter().find(|d| d.letter.eq_ignore_ascii_case("C:")).map(|d| d.letter.clone());
+    let from_removable = |e: &Event| -> bool {
+        if detail(e, "drive_type") == Some("removable") {
+            return true;
+        }
+        if detail(e, "volume_serial").is_some_and(|v| removable_vsn.contains(&v.to_ascii_uppercase())) {
+            return true;
+        }
+        let letter = e.subject.get(..2).map(str::to_ascii_uppercase).unwrap_or_default();
+        letter.ends_with(':') && removable_letters.contains(&letter) && system_letter.as_deref() != Some(letter.as_str())
+    };
+    let is_tool_letter = |e: &Event| -> bool {
+        tool_letter.as_ref().is_some_and(|l| e.subject.get(..2).is_some_and(|x| x.eq_ignore_ascii_case(l)))
+    };
+
+    // R9 이동식 저장장치에서 실행한 프로그램
+    if r.program_from_removable {
+        let mut by_prog: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        for (i, e) in ev.iter().enumerate() {
+            if e.kind == EventKind::ProgramRun
+                && ctx.in_period(e.time.utc)
+                && !tool_set.contains(&i)
+                && !is_tool_letter(e)
+                && !allowed(e)
+                && from_removable(e)
+            {
+                by_prog.entry(e.subject.clone()).or_default().push(i);
+            }
+        }
+        for (prog, ids) in by_prog {
+            let times: Vec<DateTime<Utc>> = ids.iter().filter_map(|&i| ev.get(i)?.time.utc).collect();
+            let after_hours = times.iter().any(|t| ctx.after_hours(*t));
+            let first = times.iter().min().copied();
+            let mut p = BTreeMap::new();
+            p.insert("program".to_string(), prog);
+            p.insert("count".to_string(), ids.len().to_string());
+            p.insert("time".to_string(), fmt_time(first));
+            let level = if after_hours { Level::High } else { Level::Medium };
+            findings.push(Finding { rule_id: "R9".into(), level, params: p, evidence: ids, time: first });
+        }
+    }
+
+    // R10 흔적 지우기·완전 삭제 프로그램 실행
+    if r.cleanup_tools {
+        let names: BTreeSet<String> = r.cleanup_tool_names.iter().map(|n| n.trim().to_ascii_lowercase()).collect();
+        let mut by_prog: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        for (i, e) in ev.iter().enumerate() {
+            if e.kind == EventKind::ProgramRun && ctx.in_period(e.time.utc) && names.contains(&base_name(&e.subject)) {
+                by_prog.entry(base_name(&e.subject)).or_default().push(i);
+            }
+        }
+        for (prog, ids) in by_prog {
+            let first = ids.iter().filter_map(|&i| ev.get(i)?.time.utc).min();
+            let last = ids.iter().filter_map(|&i| ev.get(i)?.time.utc).max();
+            let mut p = BTreeMap::new();
+            p.insert("program".to_string(), prog);
+            p.insert("count".to_string(), ids.len().to_string());
+            p.insert("time".to_string(), fmt_time(last));
+            findings.push(Finding { rule_id: "R10".into(), level: Level::High, params: p, evidence: ids, time: first });
+        }
+    }
+
+    // R11 원격 데스크톱 접속
+    if r.remote_logon {
+        let mut by_ip: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        for (i, e) in ev.iter().enumerate() {
+            if e.kind == EventKind::RemoteLogon
+                && ctx.in_period(e.time.utc)
+                && matches!(detail(e, "action"), Some("logon" | "auth" | "reconnect"))
+            {
+                let ip = detail(e, "source_ip").unwrap_or("").to_string();
+                by_ip.entry(ip).or_default().push(i);
+            }
+        }
+        for (ip, ids) in by_ip {
+            let external = !private_ip(&ip);
+            let times: Vec<DateTime<Utc>> = ids.iter().filter_map(|&i| ev.get(i)?.time.utc).collect();
+            let after_hours = times.iter().any(|t| ctx.after_hours(*t));
+            let level = match (external, after_hours) {
+                (true, _) => Level::High,
+                (false, true) => Level::Medium,
+                _ => Level::Low,
+            };
+            let accounts: BTreeSet<String> =
+                ids.iter().filter_map(|&i| ev.get(i)?.account.name.clone()).filter(|n| !n.is_empty()).collect();
+            let mut p = BTreeMap::new();
+            p.insert("ip".to_string(), if ip.is_empty() { "?".to_string() } else { ip });
+            p.insert("count".to_string(), ids.len().to_string());
+            p.insert("account".to_string(), accounts.into_iter().collect::<Vec<_>>().join(", "));
+            p.insert("external".to_string(), external.to_string());
+            let last = times.iter().max().copied();
+            p.insert("time".to_string(), fmt_time(last));
+            findings.push(Finding { rule_id: "R11".into(), level, params: p, evidence: ids, time: times.iter().min().copied() });
+        }
+    }
+
+    // R12 하루 전송량이 많은 프로그램
+    if r.large_upload && r.large_upload_mb > 0 {
+        let limit = u64::from(r.large_upload_mb) * 1024 * 1024;
+        let mut hits: Vec<(u64, usize)> = ev
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.kind == EventKind::NetworkUsage && ctx.in_period(e.time.utc))
+            .filter_map(|(i, e)| Some((detail(e, "bytes_sent")?.parse::<u64>().ok()?, i)))
+            .filter(|(b, _)| *b >= limit)
+            .collect();
+        hits.sort_by(|a, b| b.0.cmp(&a.0));
+        for (bytes, i) in hits.into_iter().take(10) {
+            let Some(e) = ev.get(i) else { continue };
+            let mut p = BTreeMap::new();
+            p.insert("program".to_string(), e.subject.clone());
+            p.insert("size".to_string(), human_bytes(bytes));
+            p.insert("day".to_string(), detail(e, "day_utc").unwrap_or("").to_string());
+            p.insert("time".to_string(), fmt_time(e.time.utc));
+            findings.push(Finding { rule_id: "R12".into(), level: Level::Medium, params: p, evidence: vec![i], time: e.time.utc });
+        }
+    }
+
+    // R13 원격 제어 프로그램 실행
+    if r.remote_tools {
+        let names: BTreeSet<String> = r.remote_tool_names.iter().map(|n| n.trim().to_ascii_lowercase()).collect();
+        let mut by_prog: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        for (i, e) in ev.iter().enumerate() {
+            if e.kind == EventKind::ProgramRun && ctx.in_period(e.time.utc) && names.contains(&base_name(&e.subject)) {
+                by_prog.entry(base_name(&e.subject)).or_default().push(i);
+            }
+        }
+        for (prog, ids) in by_prog {
+            let times: Vec<DateTime<Utc>> = ids.iter().filter_map(|&i| ev.get(i)?.time.utc).collect();
+            let after_hours = times.iter().any(|t| ctx.after_hours(*t));
+            let mut p = BTreeMap::new();
+            p.insert("program".to_string(), prog);
+            p.insert("count".to_string(), ids.len().to_string());
+            p.insert("time".to_string(), fmt_time(times.iter().max().copied()));
+            let level = if after_hours { Level::Medium } else { Level::Low };
+            findings.push(Finding { rule_id: "R13".into(), level, params: p, evidence: ids, time: times.iter().min().copied() });
+        }
+    }
+
     findings.sort_by(|a, b| b.level.cmp(&a.level).then(a.time.cmp(&b.time)).then(a.rule_id.cmp(&b.rule_id)));
 
     // --- 등급 ---
@@ -473,7 +669,7 @@ mod tests {
     }
 
     fn ctx<'a>(rules: &'a RuleConfig, cust: &'a Customer, tool: &'a ToolMedia) -> Context<'a> {
-        Context { rules, customer: cust, tz: chrono_tz::Asia::Seoul, period_start: None, period_end: None, tool_media: tool }
+        Context { rules, customer: cust, tz: chrono_tz::Asia::Seoul, period_start: None, period_end: None, tool_media: tool, drives: &[] }
     }
 
     #[test]
@@ -578,5 +774,69 @@ mod tests {
         assert_eq!(f.params["count"], "2");
         assert_eq!(f.level, Level::Low);
         assert_eq!(r.grade, Grade::NothingFound, "참고(Low)만 있으면 등급을 올리지 않는다");
+    }
+
+    #[test]
+    fn program_from_removable_and_tools() {
+        // 업무 시간(화 10:00 KST = 01:00 UTC)
+        let t = Utc.with_ymd_and_hms(2026, 11, 3, 1, 0, 0).unwrap();
+        let events = vec![
+            e(EventKind::StorageAttached, t, "Kingston", &[("volume_serial", "AAAA-BBBB"), ("connected", "true")]),
+            e(EventKind::ProgramRun, t, "[AAAA-BBBB]\\TOOLS\\COPYALL.EXE", &[("volume_serial", "AAAA-BBBB")]),
+            e(EventKind::ProgramRun, t, "C:\\Windows\\System32\\notepad.exe", &[("volume_serial", "1111-2222")]),
+            e(EventKind::ProgramRun, t, "C:\\Program Files\\BleachBit\\bleachbit.exe", &[]),
+            e(EventKind::ProgramRun, t, "C:\\Program Files\\AnyDesk\\AnyDesk.exe", &[]),
+        ];
+        let rules = RuleConfig::default();
+        let cust = Customer::default();
+        let tool = ToolMedia::default();
+        let r = assess(&analysis(events), &ctx(&rules, &cust, &tool));
+        let r9: Vec<_> = r.findings.iter().filter(|f| f.rule_id == "R9").collect();
+        assert_eq!(r9.len(), 1, "{:?}", r.findings);
+        assert!(r9[0].params["program"].contains("COPYALL"));
+        assert_eq!(r9[0].level, Level::Medium);
+        assert!(r.findings.iter().any(|f| f.rule_id == "R10" && f.params["program"] == "bleachbit.exe" && f.level == Level::High));
+        assert!(r.findings.iter().any(|f| f.rule_id == "R13" && f.params["program"] == "anydesk.exe" && f.level == Level::Low));
+        assert_eq!(r.grade, Grade::Review);
+
+        // 이동식 드라이브 문자로도 판단한다 (점검 시점 드라이브 정보)
+        let drives = vec![DriveInfo { letter: "F:".into(), device: String::new(), serial: None, removable: true }];
+        let mut c2 = ctx(&rules, &cust, &tool);
+        c2.drives = &drives;
+        let r2 = assess(&analysis(vec![e(EventKind::ProgramRun, t, "F:\\run.exe", &[])]), &c2);
+        assert!(r2.findings.iter().any(|f| f.rule_id == "R9"));
+        // 점검 도구가 있는 드라이브는 뺀다
+        let tool_f = ToolMedia { drive_letter: Some("F:".into()), volume_serial: None };
+        let mut c3 = ctx(&rules, &cust, &tool_f);
+        c3.drives = &drives;
+        let r3 = assess(&analysis(vec![e(EventKind::ProgramRun, t, "F:\\SecuridgeTrace.exe", &[])]), &c3);
+        assert!(!r3.findings.iter().any(|f| f.rule_id == "R9"), "{:?}", r3.findings);
+    }
+
+    #[test]
+    fn remote_logons_and_uploads() {
+        let t = Utc.with_ymd_and_hms(2026, 11, 3, 1, 0, 0).unwrap();
+        let mut ext = e(EventKind::RemoteLogon, t, "203.0.113.7", &[("action", "logon"), ("source_ip", "203.0.113.7")]);
+        ext.account.name = Some("kim".into());
+        let lan = e(EventKind::RemoteLogon, t, "192.168.0.5", &[("action", "auth"), ("source_ip", "192.168.0.5")]);
+        let disc = e(EventKind::RemoteLogon, t, "192.168.0.5", &[("action", "disconnect"), ("source_ip", "192.168.0.5")]);
+        let big = e(EventKind::NetworkUsage, t, "C:\\x\\uploader.exe", &[("bytes_sent", "2147483648"), ("day_utc", "2026-11-03")]);
+        let small = e(EventKind::NetworkUsage, t, "C:\\x\\chat.exe", &[("bytes_sent", "1048576")]);
+        let rules = RuleConfig::default();
+        let cust = Customer::default();
+        let tool = ToolMedia::default();
+        let r = assess(&analysis(vec![ext, lan, disc, big, small]), &ctx(&rules, &cust, &tool));
+        let r11: Vec<_> = r.findings.iter().filter(|f| f.rule_id == "R11").collect();
+        assert_eq!(r11.len(), 2);
+        let e11 = r11.iter().find(|f| f.params["ip"] == "203.0.113.7").unwrap();
+        assert_eq!(e11.level, Level::High);
+        assert_eq!(e11.params["account"], "kim");
+        let l11 = r11.iter().find(|f| f.params["ip"] == "192.168.0.5").unwrap();
+        assert_eq!(l11.level, Level::Low);
+        assert_eq!(l11.params["count"], "1", "연결 끊김은 세지 않는다");
+        let r12: Vec<_> = r.findings.iter().filter(|f| f.rule_id == "R12").collect();
+        assert_eq!(r12.len(), 1);
+        assert_eq!(r12[0].params["size"], "2.0 GB");
+        assert!(private_ip("10.1.2.3") && private_ip("fe80::1") && !private_ip("8.8.8.8"));
     }
 }

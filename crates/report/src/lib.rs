@@ -47,6 +47,9 @@ pub struct CaseInfo {
     pub input_unchanged: bool,
     pub time_zone: String,
     pub mask_names: bool,
+    /// 점검 시점에 연결돼 있던 드라이브 (실행 중인 PC 점검일 때)
+    #[serde(default)]
+    pub drives: Vec<st_core::DriveInfo>,
 }
 
 /// 수집 단계에서 만든 사본 하나 (실행 중 PC 점검).

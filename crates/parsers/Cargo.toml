@@ -3,7 +3,7 @@ name = "st-parsers"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "아티팩트별 파서 (휴지통, LNK, 브라우저 기록)"
+description = "아티팩트별 파서 (휴지통, LNK, 점프 목록, Prefetch, 레지스트리, 이벤트 로그, 브라우저, SRUM)"
 
 [dependencies]
 st-core.workspace = true
@@ -14,6 +14,11 @@ encoding_rs.workspace = true
 notatin = "=1.0.1"
 evtx = { version = "0.15", default-features = false }
 serde_json.workspace = true
+# 점프 목록(OLE 복합 파일) 읽기
+cfb = "0.16"
+# SRUM(ESE 데이터베이스) 읽기. 버전을 고정해 검토한 코드만 쓴다.
+srum = { package = "sootmark-srum", version = "=0.1.0" }
+common = { package = "sootmark-common", version = "=0.3.7" }
 
 [dev-dependencies]
 # 교차 검증용: 독립적으로 만들어진 다른 LNK 파서와 결과를 비교한다.

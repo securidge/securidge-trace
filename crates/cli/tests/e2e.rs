@@ -58,6 +58,17 @@ fn build_input(root: &Path) {
         &fs::read(sample).unwrap(),
     );
 
+    // Prefetch와 점프 목록 (공개 표본, crates/parsers/tests/data 참고)
+    let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("../parsers/tests/data");
+    write(
+        &root.join("Windows/Prefetch/CHROME.EXE-B3BA7868.pf"),
+        &fs::read(data.join("ez-prefetch/CHROME.EXE-B3BA7868.pf")).unwrap(),
+    );
+    write(
+        &root.join("Users/kim/AppData/Roaming/Microsoft/Windows/Recent/AutomaticDestinations/f01b4d95cf55d32a.automaticDestinations-ms"),
+        &fs::read(data.join("ez-jumplist/f01b4d95cf55d32a.automaticDestinations-ms")).unwrap(),
+    );
+
     // Chromium 기록
     let db = root.join("Users/kim/AppData/Local/Google/Chrome/User Data/Default/History");
     fs::create_dir_all(db.parent().unwrap()).unwrap();
@@ -139,7 +150,13 @@ fn full_run_is_correct_reproducible_and_leaves_input_untouched() {
     let events = evidence["events"].as_array().unwrap();
     let kinds: Vec<&str> = events.iter().map(|e| e["kind"].as_str().unwrap()).collect();
     assert_eq!(kinds.iter().filter(|k| **k == "FileDeleted").count(), 1);
-    assert_eq!(kinds.iter().filter(|k| **k == "FileOpened").count(), 1);
+    let from = |kind: &str, artifact: &str| {
+        events.iter().filter(|e| e["kind"] == kind && e["source"]["artifact"] == artifact).count()
+    };
+    assert_eq!(from("FileOpened", "lnk"), 1);
+    assert_eq!(from("FileOpened", "jumplist"), 9);
+    assert_eq!(from("ProgramRun", "prefetch"), 8);
+    assert!(html.contains("실행한 프로그램") && html.contains("CHROME.EXE"));
     assert_eq!(kinds.iter().filter(|k| **k == "WebVisit").count(), 1);
     assert_eq!(kinds.iter().filter(|k| **k == "WebDownload").count(), 1);
 
@@ -150,7 +167,7 @@ fn full_run_is_correct_reproducible_and_leaves_input_untouched() {
     assert_eq!(deleted["account"]["sid"], "S-1-5-21-1111-2222-3333-1001");
 
     // 열람 기록: 볼륨 시리얼이 들어 있는가
-    let opened = events.iter().find(|e| e["kind"] == "FileOpened").unwrap();
+    let opened = events.iter().find(|e| e["kind"] == "FileOpened" && e["source"]["artifact"] == "lnk").unwrap();
     assert_eq!(opened["details"]["volume_serial"], "E02E-8A93");
     assert_eq!(opened["details"]["drive_type"], "fixed");
     assert_eq!(opened["time"]["basis"], "FileSystem");
@@ -238,5 +255,5 @@ fn clean_input_produces_no_events_and_exit_zero() {
         serde_json::from_slice(&fs::read(dir.join("evidence.json")).unwrap()).unwrap();
     assert_eq!(evidence["events"].as_array().unwrap().len(), 0);
     // 못 찾은 아티팩트도 '0개'로 목록에 남아야 한다 (기록 없음과 행위 없음의 구분)
-    assert_eq!(evidence["checks"].as_array().unwrap().len(), 10);
+    assert_eq!(evidence["checks"].as_array().unwrap().len(), 18);
 }

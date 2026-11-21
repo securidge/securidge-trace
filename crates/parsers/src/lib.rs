@@ -9,6 +9,12 @@
 pub mod browser;
 pub mod eventlog;
 pub mod hive;
-pub mod registry;
+pub mod jumplist;
 pub mod lnk;
+pub mod prefetch;
 pub mod recyclebin;
+pub mod registry;
+pub mod shellitem;
+pub mod srum;
+pub mod userhive;
+pub mod xpress;

@@ -131,6 +131,7 @@ fn run_inner(
     let mut collection: Vec<CollectedFile> = Vec::new();
     let mut tool_media = ToolMedia::default();
     let mut admin = true;
+    let mut drives: Vec<st_core::DriveInfo> = Vec::new();
     let (root, overlay, mode_name) = match &p.mode {
         Mode::Offline(path) => {
             if !path.is_dir() {
@@ -151,6 +152,7 @@ fn run_inner(
                 warnings.push("결과가 점검 대상 PC의 디스크에 저장됩니다. USB 등 다른 저장장치에서 실행하는 것을 권합니다.".to_string());
             }
             tool_media = live::tool_media(&root);
+            drives = live::drives();
             let overlay = work.join("collected");
             if admin {
                 collection = live::collect(&overlay, &|msg| progress(Stage::Collect, msg), cancel)?;
@@ -172,7 +174,7 @@ fn run_inner(
         1252 => encoding_rs::WINDOWS_1252,
         _ => encoding_rs::EUC_KR,
     };
-    let analysis = st_timeline::analyze(&scan, &st_timeline::Options { work_dir: work, fallback_ansi: fallback });
+    let analysis = st_timeline::analyze(&scan, &st_timeline::Options { work_dir: work, fallback_ansi: fallback, drives: &drives });
     cancelled(cancel)?;
     let hashes_after = st_collect::hash_inputs(&scan);
     let input_unchanged = hashes_before == hashes_after;
@@ -187,6 +189,7 @@ fn run_inner(
             period_start,
             period_end: Some(started),
             tool_media: &tool_media,
+            drives: &drives,
         },
     );
 
@@ -216,6 +219,7 @@ fn run_inner(
             input_unchanged,
             time_zone: tz.name().to_string(),
             mask_names: p.mask_names,
+            drives,
         },
         checks: scan.checks.clone(),
         input_hashes: hashes_before,

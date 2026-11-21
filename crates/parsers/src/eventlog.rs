@@ -10,9 +10,14 @@
 //! | System (Kernel-General) | 1 | 시스템 시각이 바뀜 (OldTime, NewTime) |
 //! | Microsoft-Windows-Partition/Diagnostic | 1006 | 저장장치 연결·분리. 제조사·모델·일련번호와 볼륨 부트 레코드(Vbr0) |
 //! | Microsoft-Windows-WLAN-AutoConfig/Operational | 8001 / 8003 | 무선 네트워크 연결 / 연결 끊김 |
+//! | Security | 4624 (로그온 유형 10만) | 원격 데스크톱으로 로그온함 (계정, 접속한 주소) |
+//! | Microsoft-Windows-TerminalServices-LocalSessionManager/Operational | 21 / 24 / 25 | 원격 세션 로그온 / 연결 끊김 / 다시 연결 (접속한 주소) |
+//! | Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational | 1149 | 원격 데스크톱 인증 성공 (계정, 접속한 주소) |
 //!
 //! 근거: Microsoft Learn 보안 감사 사건 문서(1102, 4616), forensics.wiki "USB History Viewing"(1006),
-//! SANS "Making the most out of WLAN event log artifacts"(8001, 8003).
+//! SANS "Making the most out of WLAN event log artifacts"(8001, 8003),
+//! Microsoft Learn "4624(S): An account was successfully logged on"(LogonType 10 = RemoteInteractive),
+//! JPCERT/CC "Detecting Lateral Movement through Tracking Event Logs"(21, 24, 25, 1149).
 //!
 //! 볼륨 시리얼 번호(VSN)는 Vbr0의 파일 시스템별 위치에서 꺼낸다:
 //! NTFS 0x48(하위 4바이트), FAT32 0x43, FAT12/16 0x27, exFAT 0x64.
@@ -57,6 +62,9 @@ fn wanted(channel: &str, event_id: u32) -> bool {
         104 | 1 => c == "system",
         1006 => c.contains("partition/diagnostic"),
         8001 | 8003 => c.contains("wlan-autoconfig"),
+        4624 => c == "security",
+        21 | 24 | 25 => c.contains("localsessionmanager"),
+        1149 => c.contains("remoteconnectionmanager"),
         _ => false,
     }
 }
@@ -159,6 +167,10 @@ pub fn read(path: &Path) -> Result<LogRead, String> {
         let mut data = BTreeMap::new();
         flatten(at(ev, &["EventData"]), "", &mut data, 0);
         flatten(at(ev, &["UserData"]), "", &mut data, 0);
+        // 로그온 기록은 많다. 원격 데스크톱(유형 10)만 남긴다.
+        if event_id == 4624 && data.get("LogonType").map(String::as_str) != Some("10") {
+            continue;
+        }
         if event_id == 1006 {
             if let Some(vsn) = vsn_from_event(&data) {
                 data.insert("VolumeSerial".to_string(), vsn);

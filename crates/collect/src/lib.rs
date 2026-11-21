@@ -31,24 +31,47 @@ pub const ARTIFACT_EVTX_SECURITY: &str = "evtx_security";
 pub const ARTIFACT_EVTX_SYSTEM: &str = "evtx_system";
 pub const ARTIFACT_EVTX_PARTITION: &str = "evtx_partition";
 pub const ARTIFACT_EVTX_WLAN: &str = "evtx_wlan";
+pub const ARTIFACT_EVTX_RDP_SESSION: &str = "evtx_rdp_session";
+pub const ARTIFACT_EVTX_RDP_AUTH: &str = "evtx_rdp_auth";
+pub const ARTIFACT_HIVE_AMCACHE: &str = "hive_amcache";
+pub const ARTIFACT_SRUM: &str = "srum";
+pub const ARTIFACT_PREFETCH: &str = "prefetch";
+pub const ARTIFACT_JUMPLIST: &str = "jumplist";
+pub const ARTIFACT_HIVE_NTUSER: &str = "hive_ntuser";
+pub const ARTIFACT_HIVE_USRCLASS: &str = "hive_usrclass";
 
 /// 찾으려는 아티팩트 전체 목록 (못 찾은 것도 보고서에 "없음"으로 나와야 한다).
-pub const ALL_ARTIFACTS: [&str; 10] = [
+pub const ALL_ARTIFACTS: [&str; 18] = [
     ARTIFACT_HIVE_SYSTEM,
     ARTIFACT_HIVE_SOFTWARE,
+    ARTIFACT_HIVE_NTUSER,
+    ARTIFACT_HIVE_USRCLASS,
+    ARTIFACT_HIVE_AMCACHE,
     ARTIFACT_EVTX_SECURITY,
     ARTIFACT_EVTX_SYSTEM,
     ARTIFACT_EVTX_PARTITION,
     ARTIFACT_EVTX_WLAN,
+    ARTIFACT_EVTX_RDP_SESSION,
+    ARTIFACT_EVTX_RDP_AUTH,
+    ARTIFACT_PREFETCH,
+    ARTIFACT_SRUM,
     ARTIFACT_RECYCLE_BIN,
     ARTIFACT_LNK,
+    ARTIFACT_JUMPLIST,
     ARTIFACT_CHROMIUM,
     ARTIFACT_FIREFOX,
 ];
 
+/// 사용자 폴더 기준 경로 — 사용자 레지스트리 하이브. 실행 중인 PC에서는 로그온한 사용자의 것이
+/// 잠겨 있어 수집 단계가 `reg save`로 사본을 만든다 (같은 폴더 구조로 overlay에).
+pub const USER_HIVES: [(&str, &[&str]); 2] = [
+    (ARTIFACT_HIVE_NTUSER, &["NTUSER.DAT"]),
+    (ARTIFACT_HIVE_USRCLASS, &["AppData", "Local", "Microsoft", "Windows", "UsrClass.dat"]),
+];
+
 /// (아티팩트, Windows 폴더 기준 경로) — 레지스트리 하이브와 이벤트 로그.
 /// 실행 중인 PC에서는 잠겨 있어 수집 단계(live)가 사본을 만들어 둔다.
-pub const SYSTEM_FILES: [(&str, &[&str]); 6] = [
+pub const SYSTEM_FILES: [(&str, &[&str]); 10] = [
     (ARTIFACT_HIVE_SYSTEM, &["Windows", "System32", "config", "SYSTEM"]),
     (ARTIFACT_HIVE_SOFTWARE, &["Windows", "System32", "config", "SOFTWARE"]),
     (ARTIFACT_EVTX_SECURITY, &["Windows", "System32", "winevt", "Logs", "Security.evtx"]),
@@ -61,6 +84,16 @@ pub const SYSTEM_FILES: [(&str, &[&str]); 6] = [
         ARTIFACT_EVTX_WLAN,
         &["Windows", "System32", "winevt", "Logs", "Microsoft-Windows-WLAN-AutoConfig%4Operational.evtx"],
     ),
+    (
+        ARTIFACT_EVTX_RDP_SESSION,
+        &["Windows", "System32", "winevt", "Logs", "Microsoft-Windows-TerminalServices-LocalSessionManager%4Operational.evtx"],
+    ),
+    (
+        ARTIFACT_EVTX_RDP_AUTH,
+        &["Windows", "System32", "winevt", "Logs", "Microsoft-Windows-TerminalServices-RemoteConnectionManager%4Operational.evtx"],
+    ),
+    (ARTIFACT_HIVE_AMCACHE, &["Windows", "appcompat", "Programs", "Amcache.hve"]),
+    (ARTIFACT_SRUM, &["Windows", "System32", "sru", "SRUDB.dat"]),
 ];
 
 #[derive(Debug, Clone, Deserialize)]
@@ -225,6 +258,22 @@ pub fn scan_with_overlay(root: &Path, overlay: Option<&Path>) -> Result<Scan, Sc
         }
     }
 
+    // --- Prefetch: Windows\Prefetch\*.pf ---
+    if let Some(dir) = descend_ci(root, &["Windows", "Prefetch"]) {
+        for f in list_dir(&dir) {
+            if !f.is_dir && f.name.to_ascii_lowercase().ends_with(".pf") {
+                items.push(FoundItem {
+                    artifact: ARTIFACT_PREFETCH.to_string(),
+                    rel_path: rel(root, &f.path),
+                    abs_path: f.path,
+                    account: AccountRef::default(),
+                    browser: None,
+                    profile: None,
+                });
+            }
+        }
+    }
+
     // --- 사용자별 자료 ---
     let browsers: Vec<BrowserDef> = match serde_json::from_str(BROWSERS_JSON) {
         Ok(b) => b,
@@ -241,6 +290,57 @@ pub fn scan_with_overlay(root: &Path, overlay: Option<&Path>) -> Result<Scan, Sc
     if let Some(users) = descend_ci(root, &["Users"]) {
         for user in list_dir(&users).into_iter().filter(|e| e.is_dir) {
             let account = AccountRef { sid: None, name: Some(user.name.clone()) };
+
+            // 사용자 레지스트리 하이브 (수집본이 있으면 그쪽)
+            for (artifact, parts) in USER_HIVES {
+                let (dir_parts, file) = match parts.split_last() {
+                    Some((f, d)) => (d, *f),
+                    None => continue,
+                };
+                let mut found: Option<(PathBuf, PathBuf)> = None;
+                let over_user = overlay.map(|o| o.join("Users").join(&user.name));
+                for base in over_user.iter().map(PathBuf::as_path).chain(std::iter::once(user.path.as_path())) {
+                    let dir = if dir_parts.is_empty() { Some(base.to_path_buf()) } else { descend_ci(base, dir_parts) };
+                    if let Some(f) = dir.and_then(|d| child_ci(&d, file)).filter(|e| !e.is_dir) {
+                        found = Some((base.to_path_buf(), f.path));
+                        break;
+                    }
+                }
+                if let Some((base, path)) = found {
+                    let from_overlay = over_user.as_deref() == Some(base.as_path());
+                    let rel_path = match overlay {
+                        Some(o) if from_overlay => format!("[수집본]/{}", rel(o, &path)),
+                        _ => rel(root, &path),
+                    };
+                    items.push(FoundItem {
+                        artifact: artifact.to_string(),
+                        rel_path,
+                        abs_path: path,
+                        account: account.clone(),
+                        browser: None,
+                        profile: None,
+                    });
+                }
+            }
+
+            // 점프 목록
+            for (sub, ext) in [("AutomaticDestinations", ".automaticdestinations-ms"), ("CustomDestinations", ".customdestinations-ms")] {
+                let Some(dir) = descend_ci(&user.path, &["AppData", "Roaming", "Microsoft", "Windows", "Recent", sub]) else {
+                    continue;
+                };
+                for f in list_dir(&dir) {
+                    if !f.is_dir && f.name.to_ascii_lowercase().ends_with(ext) {
+                        items.push(FoundItem {
+                            artifact: ARTIFACT_JUMPLIST.to_string(),
+                            rel_path: rel(root, &f.path),
+                            abs_path: f.path,
+                            account: account.clone(),
+                            browser: None,
+                            profile: None,
+                        });
+                    }
+                }
+            }
 
             // 최근 연 파일: Windows Recent 폴더와 Office Recent 폴더의 *.lnk
             for recent in [
@@ -339,7 +439,7 @@ pub fn hash_inputs(scan: &Scan) -> BTreeMap<String, String> {
         if item.artifact == ARTIFACT_CHROMIUM || item.artifact == ARTIFACT_FIREFOX {
             paths.extend(sqlite_sidecars(&item.abs_path));
         }
-        if item.artifact == ARTIFACT_HIVE_SYSTEM || item.artifact == ARTIFACT_HIVE_SOFTWARE {
+        if item.artifact.starts_with("hive_") {
             paths.extend(hive_logs(&item.abs_path));
         }
         for p in paths {
@@ -402,8 +502,19 @@ mod tests {
         touch(&root.join("users/Kim/AppData/Local/Google/Chrome/User Data/Profile 1/History"));
         touch(&root.join("users/Lee/AppData/Roaming/Mozilla/Firefox/Profiles/x.default/places.sqlite"));
 
+        touch(&root.join("Windows/Prefetch/NOTEPAD.EXE-D8414F97.pf"));
+        touch(&root.join("Windows/Prefetch/Layout.ini"));
+        touch(&root.join("users/Kim/NTUSER.DAT"));
+        touch(&root.join("users/Kim/AppData/Local/Microsoft/Windows/UsrClass.dat"));
+        touch(&root.join("users/Kim/AppData/Roaming/Microsoft/Windows/Recent/AutomaticDestinations/9b9cdc69c1c24e2b.automaticDestinations-ms"));
+        touch(&root.join("users/Kim/AppData/Roaming/Microsoft/Windows/Recent/CustomDestinations/5afe4de1b92fc382.customDestinations-ms"));
+
         let s = scan(&root).unwrap();
         let count = |a: &str| s.checks.iter().find(|c| c.artifact == a).unwrap().count;
+        assert_eq!(count(ARTIFACT_PREFETCH), 1, "Layout.ini는 세지 않는다");
+        assert_eq!(count(ARTIFACT_HIVE_NTUSER), 1);
+        assert_eq!(count(ARTIFACT_HIVE_USRCLASS), 1);
+        assert_eq!(count(ARTIFACT_JUMPLIST), 2);
         assert_eq!(count(ARTIFACT_RECYCLE_BIN), 1, "$R 파일은 세지 않는다");
         assert_eq!(count(ARTIFACT_LNK), 1);
         assert_eq!(count(ARTIFACT_CHROMIUM), 2);
@@ -425,11 +536,18 @@ mod tests {
         assert!(hive.abs_path.starts_with(&ov));
         assert!(hive.rel_path.starts_with("[수집본]/"));
         assert!(hash_inputs(&s2).keys().any(|k| k.ends_with("SYSTEM.LOG1")));
+        // 사용자 하이브도 수집본을 먼저 쓴다.
+        touch(&ov.join("Users/Kim/NTUSER.DAT"));
+        let s3 = scan_with_overlay(&root, Some(&ov)).unwrap();
+        let nt = s3.items.iter().find(|i| i.artifact == ARTIFACT_HIVE_NTUSER).unwrap();
+        assert!(nt.abs_path.starts_with(&ov), "{:?}", nt.abs_path);
+        assert_eq!(nt.rel_path, "[수집본]/Users/Kim/NTUSER.DAT");
+        assert_eq!(nt.account.name.as_deref(), Some("Kim"));
 
         // 해시에는 보조 파일(-wal)도 포함된다.
         let hashes = hash_inputs(&s);
         assert!(hashes.keys().any(|k| k.ends_with("History-wal")));
-        assert_eq!(hashes.len(), 6);
+        assert_eq!(hashes.len(), 11);
     }
 
     #[test]
@@ -437,7 +555,7 @@ mod tests {
         let root = temp_root("empty");
         let s = scan(&root).unwrap();
         assert_eq!(s.checks.len(), ALL_ARTIFACTS.len());
-        assert_eq!(s.checks.len(), 10);
+        assert_eq!(s.checks.len(), 18);
         assert!(s.checks.iter().all(|c| c.count == 0));
         assert!(matches!(scan(&root.join("nope")), Err(ScanError::InputNotFound)));
     }
