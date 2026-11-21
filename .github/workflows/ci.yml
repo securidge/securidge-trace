@@ -15,18 +15,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
-      - run: cargo build --release -p st-cli
-      - if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: trace-exe-${{ matrix.os }}
-          path: target/release/trace.exe
+      - run: cargo build --release -p st-cli -p st-gui
 
   # 2. Windows 가상 머신에서 실제 기록을 만들고, 도구 결과를 정답과 대조
   windows-truth:
@@ -38,9 +33,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.0
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p st-cli
+      - run: cargo build --release -p st-cli -p st-gui
 
       - name: 정답이 있는 실제 기록 만들기
         shell: pwsh
@@ -64,6 +59,33 @@ jobs:
           $code = $LASTEXITCODE
           Get-Content D:\st-summary.md -Encoding utf8 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
           exit $code
+
+      - name: 정답 하이브 (USB·휴대 장치·블루투스·네트워크) 만들고 대조
+        shell: pwsh
+        run: |
+          ./ci/win-fake-hives.ps1 -Out D:\fake
+          & .\target\release\trace.exe analyze --input D:\fake --output D:\st-fake --case fake --lang ko
+          $dir = Get-ChildItem D:\st-fake -Directory | Select-Object -Last 1
+          python ci/verify_more.py fake D:\fake\fake-truth.json $dir.FullName D:\sum-fake.md
+          $code = $LASTEXITCODE
+          Get-Content D:\sum-fake.md -Encoding utf8 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          exit $code
+
+      - name: 이 PC 점검 실기 (로그 삭제·시계 변경 후 trace check)
+        shell: pwsh
+        run: |
+          ./ci/win-live-setup.ps1 -Truth D:\live-truth.json
+          & .\target\release\trace.exe check --i-am-authorized --output D:\st-live --case gha-live --lang ko
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) { exit 1 }
+          $dir = Get-ChildItem D:\st-live -Directory | Select-Object -Last 1
+          python ci/verify_more.py live D:\live-truth.json $dir.FullName D:\sum-live.md
+          $code = $LASTEXITCODE
+          Get-Content D:\sum-live.md -Encoding utf8 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          exit $code
+
+      - name: 화면 프로그램 실행 확인
+        shell: pwsh
+        run: ./ci/win-gui-smoke.ps1 -Exe "$pwd\target\release\SecuridgeTrace.exe" -Shot D:\gui.jpg
 
       - name: 실제 샘플을 로그로 내보내기 (결과물 다운로드가 막힌 환경용)
         if: always()

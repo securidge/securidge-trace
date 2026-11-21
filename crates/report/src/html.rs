@@ -150,6 +150,7 @@ ol.key li{margin:6px 0}.lv{display:inline-block;font-size:11px;padding:1px 7px;b
 button{font:inherit;padding:6px 14px;border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:6px;cursor:pointer}
 .part{page-break-before:always}.part:first-of-type{page-break-before:auto}
 .mono{font-family:Consolas,"D2Coding",monospace;font-size:11.5px}
+.tl td:nth-child(1),.tl td:nth-child(2),.tl td:nth-child(3),.tl td:nth-child(6),.tl th{white-space:nowrap;word-break:keep-all}.tl td:nth-child(7){width:30%}
 @media print{body{background:#fff}.page{padding:0;max-width:none}.toolbar{display:none}h2{page-break-after:avoid}tr{page-break-inside:avoid}}
 "#;
 
@@ -239,9 +240,21 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
 
     let _ = write!(h, "<h3>{}</h3><ul>", esc(&c.t("report.next_steps")));
     let mut steps = Vec::new();
+    let has_devices = !a.devices.is_empty();
     match asmt.grade {
-        Grade::Review => steps.extend(["next.review", "next.device", "next.keep"]),
-        Grade::Caution => steps.extend(["next.device", "next.keep"]),
+        Grade::Review => {
+            steps.push("next.review");
+            if has_devices {
+                steps.push("next.device");
+            }
+            steps.push("next.keep");
+        }
+        Grade::Caution => {
+            if has_devices {
+                steps.push("next.device");
+            }
+            steps.push("next.keep");
+        }
         Grade::Undetermined => steps.extend(["next.rerun_admin", "next.keep"]),
         Grade::NothingFound => steps.extend(["next.nothing"]),
     }
@@ -331,7 +344,7 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
     // 시간순 기록 (최근 것부터 TIMELINE_LIMIT건, 번호는 근거 번호와 같다)
     let _ = write!(
         h,
-        "<h3>{}</h3><p class=\"note\">{}</p><table><tr><th>#</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>",
+        "<h3>{}</h3><p class=\"note\">{}</p><table class=\"tl\"><tr><th>#</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>",
         esc(&c.t("report.timeline")),
         esc(&tf(lang, "report.timeline_note", &[("limit", &TIMELINE_LIMIT.to_string())])),
         esc(&c.t("col.time")),

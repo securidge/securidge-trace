@@ -194,7 +194,9 @@ impl AsRefOpt for Value {
 fn hex_bytes(s: &str, max: usize) -> Vec<u8> {
     let clean: Vec<u8> = s.bytes().filter(u8::is_ascii_hexdigit).collect();
     clean
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .take(max)
         .filter_map(|c| std::str::from_utf8(c).ok().and_then(|h| u8::from_str_radix(h, 16).ok()))
         .collect()

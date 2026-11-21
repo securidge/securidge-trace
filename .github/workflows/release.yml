@@ -1,0 +1,49 @@
+# v로 시작하는 태그(예: v0.1.0)를 올리면 Windows용 배포 파일을 만들어 GitHub 릴리스에 올린다.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo build --release -p st-cli -p st-gui
+
+      - name: 배포 파일 만들기
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}"
+          $name = "SecuridgeTrace-$ver-windows-x64"
+          $dir = Join-Path $pwd "out\$name"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item target\release\SecuridgeTrace.exe, target\release\trace.exe $dir
+          Copy-Item dist\*.txt, LICENSE-MIT, LICENSE-APACHE $dir
+          python tools/third_party.py | Out-File -Encoding utf8 (Join-Path $dir 'THIRD-PARTY-LICENSES.txt')
+          $zip = Join-Path $pwd "out\$name.zip"
+          Compress-Archive -Path $dir -DestinationPath $zip -Force
+          $h = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$h  $name.zip" | Out-File -Encoding ascii "out\$name.zip.sha256"
+          Get-ChildItem out | Format-Table Name, Length | Out-Host
+          "ZIP=$zip" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "SUM=out\$name.zip.sha256" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: GitHub 릴리스에 올리기
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Securidge Trace ${{ github.ref_name }}
+          body_path: dist/RELEASE_NOTES.md
+          files: |
+            ${{ env.ZIP }}
+            ${{ env.SUM }}

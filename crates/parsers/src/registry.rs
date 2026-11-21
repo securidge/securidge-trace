@@ -205,7 +205,7 @@ pub fn mounted_devices(system: &mut Hive) -> Vec<(String, String)> {
             continue;
         }
         let units: Vec<u16> =
-            data.chunks_exact(2).filter_map(|c| c.try_into().ok().map(u16::from_le_bytes)).collect();
+            data.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect();
         out.push((letter.to_string(), String::from_utf16_lossy(&units)));
     }
     out.sort();

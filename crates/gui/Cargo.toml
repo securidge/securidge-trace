@@ -1,0 +1,25 @@
+[package]
+name = "st-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Securidge Trace 화면 프로그램 (egui)"
+
+[[bin]]
+name = "SecuridgeTrace"
+path = "src/main.rs"
+
+[dependencies]
+st-core.workspace = true
+st-i18n.workspace = true
+st-rules.workspace = true
+st-report.workspace = true
+st-engine.workspace = true
+chrono-tz.workspace = true
+eframe = "0.37"
+
+[build-dependencies]
+embed-manifest = "1.5"
+
+[lints]
+workspace = true

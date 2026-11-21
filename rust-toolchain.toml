@@ -1,0 +1,4 @@
+# 배포물을 재현 가능하게 만들기 위해 컴파일러 버전을 고정한다.
+[toolchain]
+channel = "1.97.0"
+components = ["clippy", "rustfmt"]

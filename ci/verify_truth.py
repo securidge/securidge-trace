@@ -49,7 +49,10 @@ def main():
     out_dir = Path(sys.argv[2])
     summary_path = Path(sys.argv[3])
     evidence = json.loads((out_dir / "evidence.json").read_text(encoding="utf-8"))
-    run = json.loads((out_dir / "run.json").read_text(encoding="utf-8"))
+    case = json.loads((out_dir / "case.json").read_text(encoding="utf-8"))
+    report = (out_dir / "report_ko.html").read_text(encoding="utf-8")
+    created = report.split("보고서 생성</td><td>")[1].split("<")[0] if "보고서 생성</td><td>" in report else ""
+    run = {"input_unchanged": case["info"]["input_unchanged"], "finished_display": created}
     events = evidence["events"]
 
     rows = []  # (구분, 항목, 판정, 설명)
@@ -130,8 +133,9 @@ def main():
     check("기타", "입력 불변", run.get("input_unchanged") is True,
           f"input_unchanged={run.get('input_unchanged')} (실행 중 PC에서는 다른 프로그램 때문에 바뀔 수 있음)",
           hard=False)
-    check("기타", "표시 시각 형식", "(" in run.get("finished_display", ""),
-          run.get("finished_display", ""), hard=True)
+    fd = run.get("finished_display", "")
+    check("기타", "보고서 생성 시각 형식 (2026.11.21.(토), 18:01:02 (KST, UTC+09:00))",
+          len(fd) > 20 and fd[4] == "." and fd[10:12] == ".(" and fd.endswith("(KST, UTC+09:00)"), fd, hard=True)
 
     issues = evidence.get("issues", [])
     lines = [

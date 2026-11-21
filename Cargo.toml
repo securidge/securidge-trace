@@ -10,6 +10,7 @@ members = [
     "crates/engine",
     "crates/report",
     "crates/cli",
+    "crates/gui",
 ]
 
 [workspace.package]
