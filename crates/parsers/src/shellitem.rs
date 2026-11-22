@@ -96,7 +96,10 @@ fn ascii_until_nul(d: &[u8], off: usize, max: usize) -> Option<String> {
 }
 
 /// 확장 블록 0xBEEF0004 (긴 이름, 생성·접근 시각).
-fn beef0004(item: &[u8]) -> Option<(String, Option<DateTime<Utc>>, Option<DateTime<Utc>>)> {
+/// (긴 이름, 생성 시각, 접근 시각)
+type Beef = (String, Option<DateTime<Utc>>, Option<DateTime<Utc>>);
+
+fn beef0004(item: &[u8]) -> Option<Beef> {
     let sig = [0x04u8, 0x00, 0xEF, 0xBE];
     let pos = item.windows(4).position(|w| w == sig)?;
     let start = pos.checked_sub(4)?;

@@ -2,7 +2,7 @@
 //!
 //! 표본과 기대값: Eric Zimmerman의 Prefetch 라이브러리 테스트 (MIT, tests/data/ez-prefetch/LICENSE).
 //! 기대 시각은 그 테스트의 값(-07:00 표기)을 UTC로 바꾼 것이다.
-#![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+#![allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::path::PathBuf;
 

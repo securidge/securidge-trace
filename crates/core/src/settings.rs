@@ -31,6 +31,8 @@ pub struct Settings {
     pub keep_collected_copies: bool,
     /// 글자 크기 배율 (1.0 = 기본)
     pub ui_scale: f32,
+    /// 화면 테마: "dark" 또는 "light"
+    pub theme: String,
     pub rules: RuleConfig,
 }
 
@@ -49,6 +51,7 @@ impl Default for Settings {
             mask_names: false,
             keep_collected_copies: false,
             ui_scale: 1.0,
+            theme: "dark".to_string(),
             rules: RuleConfig::default(),
         }
     }

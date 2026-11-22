@@ -116,6 +116,42 @@ def live(truth, case):
     r6 = [f for f in rules if f["rule_id"] == "R6"]
     check("판단", "사람이 바꾼 시계(R6)", len(r6) >= 1, [f["params"].get("minutes") for f in r6])
     check("결과", "등급 = 확인 필요", case["assessment"]["grade"] == "Review", case["assessment"]["grade"])
+    # --- 새 흔적 (v0.2) ---
+    ntuser = [c for c in case["collection"] if c["artifact"] == "hive_ntuser"]
+    check("수집", "로그온 사용자 하이브 reg save HKU", any(c["ok"] for c in ntuser), [(c["method"], c["ok"], c["message"][:80]) for c in ntuser])
+    for art in ["hive_usrclass", "hive_amcache", "srum", "evtx_rdp_session", "evtx_rdp_auth"]:
+        cs = [c for c in case["collection"] if c["artifact"] == art]
+        check("수집", art, any(c["ok"] for c in cs), [(c["method"][-40:], c["ok"], c["message"][:100]) for c in cs], hard=False)
+    check("수집", "드라이브 정보 (C:의 장치 경로·일련번호)",
+          any(d["letter"] == "C:" and d["device"].lower().startswith("\\device\\") and d.get("serial") for d in case["info"].get("drives", [])),
+          [(d["letter"], d["device"], d.get("serial"), d["removable"]) for d in case["info"].get("drives", [])][:6])
+    ev = a["events"]
+    count = {}
+    for e in ev:
+        key = (e["kind"], e["source"]["artifact"])
+        count[key] = count.get(key, 0) + 1
+    for kind, art in [("ProgramRun", "prefetch"), ("ProgramRun", "bam"), ("ProgramRun", "userassist"), ("ProgramPresent", "hive_amcache"),
+                      ("FolderOpened", "shellbags"), ("FileOpened", "jumplist"), ("NetworkUsage", "srum"), ("RemoteLogon", "evtx_security")]:
+        check("새 흔적", f"{kind} ← {art}", count.get((kind, art), 0) > 0, f"{count.get((kind, art), 0)}건", hard=False)
+    pf = truth.get("prefetch", {})
+    runs = [e for e in ev if e["kind"] == "ProgramRun" and e["source"]["artifact"] == "prefetch" and e["subject"].upper().endswith("\\" + pf.get("name", "?"))]
+    if pf.get("exists"):
+        check("Prefetch", "직접 실행한 프로그램 찾기", len(runs) >= 1, [r["subject"] for r in runs][:2])
+        if runs:
+            rc = {r["details"].get("run_count") for r in runs}
+            check("Prefetch", "실행 횟수 = 3", rc == {str(pf["runs"])}, rc)
+            latest = max(r["time"]["utc"] for r in runs)
+            from datetime import datetime, timedelta
+            p = lambda x: datetime.fromisoformat(x.replace("Z", "+00:00"))
+            ok = p(pf["start"]) - timedelta(seconds=5) <= p(latest) <= p(pf["end"]) + timedelta(seconds=120)
+            check("Prefetch", "마지막 실행 시각이 실행한 구간 안", ok, f"{latest} / {pf['start']}~{pf['end']}")
+            check("Prefetch", "실행 시각 개수 = 3", len(runs) == pf["runs"], len(runs))
+    else:
+        check("Prefetch", "이 VM에서 Prefetch 파일이 만들어짐", False, "SysMain이 파일을 만들지 않음", hard=False)
+    bad = [i for i in a["issues"] if i["artifact"] in ("prefetch", "jumplist", "hive_ntuser", "hive_usrclass", "hive_amcache", "srum")
+           and not i["reason"].startswith("참고:")]
+    check("새 흔적", "읽지 못한 파일", len(bad) == 0, [(i["artifact"], i["file"][-50:], i["reason"][:80]) for i in bad][:5], hard=False)
+
     tool = case["info"]["tool_media"]
     check("점검 도구", "도구 매체 식별 (D: 드라이브에서 실행)", (tool.get("drive_letter") or "").upper() == "D:" and bool(tool.get("volume_serial")),
           tool, hard=False)

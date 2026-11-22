@@ -205,7 +205,7 @@ pub fn parse(raw: &[u8]) -> Result<PrefetchInfo, PrefetchError> {
 
     // 최신 실행이 먼저 오도록 (Windows가 이미 그렇게 저장하지만 한 번 더 정렬)
     let mut pairs: Vec<(DateTime<Utc>, u64)> = last_runs.into_iter().zip(last_runs_raw).collect();
-    pairs.sort_by(|a, b| b.0.cmp(&a.0));
+    pairs.sort_by_key(|x| std::cmp::Reverse(x.0));
     let (last_runs, last_runs_raw) = pairs.into_iter().unzip();
 
     Ok(PrefetchInfo { version, executable, hash, run_count, last_runs, last_runs_raw, volumes, files, executable_path })

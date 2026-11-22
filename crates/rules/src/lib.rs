@@ -577,7 +577,7 @@ pub fn assess(a: &Analysis, ctx: &Context) -> Assessment {
             .filter_map(|(i, e)| Some((detail(e, "bytes_sent")?.parse::<u64>().ok()?, i)))
             .filter(|(b, _)| *b >= limit)
             .collect();
-        hits.sort_by(|a, b| b.0.cmp(&a.0));
+        hits.sort_by_key(|x| std::cmp::Reverse(x.0));
         for (bytes, i) in hits.into_iter().take(10) {
             let Some(e) = ev.get(i) else { continue };
             let mut p = BTreeMap::new();

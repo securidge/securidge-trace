@@ -136,26 +136,44 @@ pub fn finding_sentence(f: &Finding, lang: Lang, tz: Tz) -> String {
     )
 }
 
+/// 머리말의 고리 모양 표시 (외부 파일 없이 SVG로).
+const LOGO: &str = r##"<svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true"><path d="M7.4 30.5A17 17 0 1 1 36.6 30.5" fill="none" stroke="#22d3ee" stroke-width="3" stroke-linecap="round"/><path d="M15 26.5A8.5 8.5 0 1 1 30 18" fill="none" stroke="#22d3ee" stroke-width="2.4" stroke-linecap="round" opacity=".75"/><circle cx="22" cy="22" r="3.2" fill="#22d3ee"/></svg>"##;
+
 const CSS: &str = r#"
-:root{--ink:#1d2433;--muted:#5b6475;--line:#d9dee7;--bg:#f6f7f9;--ok:#1f8a4c;--warn:#c98a00;--bad:#c62f2f;--na:#6b7280}
-*{box-sizing:border-box}body{margin:0;font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;font-size:14px}
-.page{max-width:1000px;margin:0 auto;background:#fff;padding:36px 44px}
-h1{font-size:24px;margin:0 0 4px}h2{font-size:19px;margin:34px 0 12px;padding-bottom:6px;border-bottom:2px solid var(--ink)}h3{font-size:15px;margin:22px 0 8px}
-.sub{color:var(--muted);margin:0 0 18px}
-table{width:100%;border-collapse:collapse;margin:6px 0 10px;font-size:12.5px}th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top;word-break:break-all}th{background:#eef1f5;font-weight:600}
-.meta td:first-child{width:24%;background:#fafbfc;font-weight:600;word-break:keep-all}
-.grade{display:flex;align-items:center;gap:16px;border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:16px 0}
-.light{width:46px;height:46px;border-radius:50%;flex:none}.g-nothing .light{background:var(--ok)}.g-caution .light{background:var(--warn)}.g-review .light{background:var(--bad)}.g-undetermined .light{background:var(--na)}
-.grade .label{font-size:21px;font-weight:700}.grade .desc{color:var(--muted)}
-ol.key li{margin:6px 0}.lv{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;color:#fff;margin-right:6px;vertical-align:1px}.lv-High{background:var(--bad)}.lv-Medium{background:var(--warn)}.lv-Low{background:var(--na)}
-.box{border:1px solid var(--line);background:#fafbfc;border-radius:8px;padding:10px 16px;margin:12px 0}.box ul{margin:6px 0;padding-left:20px}
-.note{color:var(--muted);font-size:12px}.fp{color:var(--muted);font-size:12px;margin-top:2px}
-.toolbar{position:sticky;top:0;background:#fff;padding:8px 0;margin:-8px 0 12px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
-button{font:inherit;padding:6px 14px;border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:6px;cursor:pointer}
+:root{--ink:#0f172a;--muted:#5b6475;--faint:#8a94a6;--line:#e3e8ef;--soft:#f5f7fa;--accent:#0891b2;--accent-soft:#e6f6f9;--ok:#169a5a;--warn:#c48200;--bad:#d23232;--na:#6e7682;--hero:#0b0e14}
+*{box-sizing:border-box}html{background:#eef1f5}
+body{margin:0;font-family:"Pretendard","Malgun Gothic","맑은 고딕","Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:var(--ink);line-height:1.6;font-size:14px;-webkit-font-smoothing:antialiased}
+.page{max-width:1040px;margin:24px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.06),0 8px 28px rgba(15,23,42,.06)}
+.hero{background:var(--hero);color:#e6edf3;padding:30px 44px 26px;display:flex;align-items:center;gap:18px}
+.hero svg{flex:none}.hero h1{font-size:23px;margin:0;font-weight:700;letter-spacing:-.2px}.hero .sub{color:#91a0b4;margin:2px 0 0;font-size:13px}
+.hero .brand{margin-left:auto;text-align:right;font-size:12px;color:#91a0b4}.hero .brand b{color:#22d3ee;letter-spacing:2px;font-size:11px}
+.body{padding:8px 44px 40px}
+h2{font-size:18px;margin:34px 0 14px;display:flex;align-items:center;gap:10px}h2 .no{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:var(--accent-soft);color:var(--accent);font-size:13px}
+h3{font-size:13px;margin:26px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+table{width:100%;border-collapse:separate;border-spacing:0;margin:6px 0 12px;font-size:12.5px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{padding:7px 10px;text-align:left;vertical-align:top;word-break:break-all;border-bottom:1px solid var(--line)}tr:last-child td{border-bottom:none}
+th{background:var(--soft);font-weight:600;color:var(--muted);font-size:12px}tr:nth-child(even) td{background:#fbfcfd}
+.meta td:first-child{width:24%;color:var(--muted);font-weight:600;word-break:keep-all}
+.grade{display:flex;align-items:center;gap:18px;border:1px solid var(--line);border-left:6px solid var(--na);border-radius:12px;padding:18px 22px;margin:18px 0}
+.light{width:44px;height:44px;border-radius:50%;flex:none;border:4px solid currentColor;position:relative}.light:after{content:"";position:absolute;inset:9px;border-radius:50%;background:currentColor}
+.g-nothing{border-left-color:var(--ok)}.g-nothing .light,.g-nothing .label{color:var(--ok)}
+.g-caution{border-left-color:var(--warn)}.g-caution .light,.g-caution .label{color:var(--warn)}
+.g-review{border-left-color:var(--bad)}.g-review .light,.g-review .label{color:var(--bad)}
+.g-undetermined .light,.g-undetermined .label{color:var(--na)}
+.grade .label{font-size:22px;font-weight:700}.grade .desc{color:var(--muted)}
+ol.key{padding-left:0;list-style:none;counter-reset:k}ol.key li{margin:8px 0;padding:12px 14px;border:1px solid var(--line);border-radius:10px}
+.lv{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;margin-right:6px;vertical-align:1px;font-weight:600}
+.lv-High{background:#fde8e8;color:var(--bad)}.lv-Medium{background:#fff4dc;color:var(--warn)}.lv-Low{background:#eef0f3;color:var(--na)}
+.box{border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:10px 16px;margin:14px 0}.box ul{margin:6px 0;padding-left:20px}
+.note{color:var(--faint);font-size:12px}.fp{color:var(--faint);font-size:12px;margin-top:2px}
+.toolbar{position:sticky;top:0;z-index:2;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);padding:10px 44px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
+button{font:inherit;font-weight:600;padding:7px 16px;border:0;background:var(--accent);color:#fff;border-radius:8px;cursor:pointer}
+.bar{height:6px;background:var(--soft);border-radius:3px;margin:3px 0 4px;overflow:hidden}.bar span{display:block;height:100%;background:var(--accent);border-radius:3px}
 .part{page-break-before:always}.part:first-of-type{page-break-before:auto}
 .mono{font-family:Consolas,"D2Coding",monospace;font-size:11.5px}
+.pg td:nth-child(1),.pg th,.pg td.nw{white-space:nowrap;word-break:keep-all}.pg td:nth-child(2){word-break:break-word}
 .tl td:nth-child(1),.tl td:nth-child(2),.tl td:nth-child(3),.tl td:nth-child(6),.tl th{white-space:nowrap;word-break:keep-all}.tl td:nth-child(7){width:30%}
-@media print{body{background:#fff}.page{padding:0;max-width:none}.toolbar{display:none}h2{page-break-after:avoid}tr{page-break-inside:avoid}}
+@media print{html{background:#fff}.page{margin:0;max-width:none;box-shadow:none;border-radius:0}.toolbar{display:none}.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}h2{page-break-after:avoid}tr{page-break-inside:avoid}}
 "#;
 
 /// 보고서 HTML 전체.
@@ -180,10 +198,17 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
         esc(&c.t("report.print")),
         esc(&c.t("report.print_hint"))
     );
-    let _ = write!(h, "<h1>{}</h1><p class=\"sub\">{} · {}</p>", esc(&c.t("report.title")), esc(&c.t("app.name")), esc(&c.t("app.tagline")));
+    let _ = write!(
+        h,
+        "<header class=\"hero\">{LOGO}<div><h1>{}</h1><p class=\"sub\">{} · {}</p></div><div class=\"brand\"><b>SECURIDGE TRACE</b><br>v{}</div></header><div class=\"body\">",
+        esc(&c.t("report.title")),
+        esc(&i.pc_name),
+        esc(&format_stamp_with_zone(i.started_utc, tz, lang)),
+        esc(&i.tool_version)
+    );
 
     // ===== 1부 =====
-    let _ = write!(h, "<section class=\"part\"><h2>1. {}</h2>", esc(&c.t("report.part1")));
+    let _ = write!(h, "<section class=\"part\"><h2><span class=\"no\">1</span>{}</h2>", esc(&c.t("report.part1")));
     let period = match (asmt.period_start, i.period_days) {
         (Some(s), d) if d > 0 => format!("{} ~ {} ({d}{})", c.when(Some(s)), c.when(asmt.period_end), if lang == Lang::Ko { "일" } else { " days" }),
         _ => c.t("report.period_all"),
@@ -283,7 +308,7 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
     let _ = write!(h, "</ul></div><p class=\"note\">{}</p></section>", esc(&c.t("report.reference_only")));
 
     // ===== 2부 =====
-    let _ = write!(h, "<section class=\"part\"><h2>2. {}</h2>", esc(&c.t("report.part2")));
+    let _ = write!(h, "<section class=\"part\"><h2><span class=\"no\">2</span>{}</h2>", esc(&c.t("report.part2")));
 
     // 판단 근거
     let _ = write!(h, "<h3>{}</h3>", esc(&c.t("report.findings")));
@@ -612,7 +637,7 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
     for k in ["limit.1", "limit.2", "limit.3"] {
         let _ = write!(h, "<li>{}</li>", esc(&c.t(k)));
     }
-    let _ = write!(h, "</ul><p class=\"note\">{}</p></section></div></body></html>", esc(&c.t("report.reference_only")));
+    let _ = write!(h, "</ul><p class=\"note\">{}</p></section></div></div></body></html>", esc(&c.t("report.reference_only")));
     h
 }
 
@@ -671,7 +696,7 @@ fn render_programs(h: &mut String, c: &Ctx) {
     list.sort_by(|x, y| y.removable.cmp(&x.removable).then(y.last.cmp(&x.last)));
     let _ = write!(
         h,
-        "<h3>{}</h3><p class=\"note\">{}</p><table class=\"tl\"><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>",
+        "<h3>{}</h3><p class=\"note\">{}</p><table class=\"pg\"><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>",
         esc(&c.t("report.programs")),
         esc(&tf(c.lang, "report.programs_note", &[("limit", &SECTION_LIMIT.to_string())])),
         esc(&c.t("col.last")),
@@ -683,7 +708,7 @@ fn render_programs(h: &mut String, c: &Ctx) {
         let flag = if r.removable { format!(" <span class=\"lv lv-Medium\">{}</span>", esc(&c.t("col.from_removable"))) } else { String::new() };
         let _ = write!(
             h,
-            "<tr><td>{}</td><td><b>{}</b>{flag}<div class=\"note\">{}</div></td><td>{}</td><td>{}</td></tr>",
+            "<tr><td>{}</td><td><b>{}</b>{flag}<div class=\"note\">{}</div></td><td class=\"nw\">{}</td><td class=\"nw\">{}</td></tr>",
             esc(&c.when(r.last)),
             esc(base_of(&r.path)),
             esc(&c.subject(&r.path)),
@@ -700,10 +725,10 @@ fn render_remote(h: &mut String, c: &Ctx) {
     if ev.is_empty() {
         return;
     }
-    ev.sort_by(|x, y| y.time.utc.cmp(&x.time.utc));
+    ev.sort_by_key(|x| std::cmp::Reverse(x.time.utc));
     let _ = write!(
         h,
-        "<h3>{}</h3><table class=\"tl\"><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>",
+        "<h3>{}</h3><table class=\"pg\"><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>",
         esc(&c.t("report.remote")),
         esc(&c.t("col.time")),
         esc(&c.t("col.action")),
@@ -738,7 +763,7 @@ fn render_transfer(h: &mut String, c: &Ctx) {
         return;
     }
     let mut list: Vec<(String, (u64, u64))> = sums.into_iter().collect();
-    list.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
+    list.sort_by_key(|x| std::cmp::Reverse(x.1 .0));
     const TOP: usize = 15;
     let max = list.first().map(|x| x.1 .0).unwrap_or(1).max(1);
     let _ = write!(
@@ -794,7 +819,7 @@ fn render_folders(h: &mut String, c: &Ctx) {
     ev.sort_by(|x, y| y.time.utc.cmp(&x.time.utc).then(x.subject.cmp(&y.subject)));
     let _ = write!(
         h,
-        "<h3>{}</h3><table class=\"tl\"><tr><th>{}</th><th>{}</th><th>{}</th></tr>",
+        "<h3>{}</h3><table class=\"pg\"><tr><th>{}</th><th>{}</th><th>{}</th></tr>",
         esc(&c.t("report.folders")),
         esc(&c.t("col.time")),
         esc(&c.t("col.folder")),
