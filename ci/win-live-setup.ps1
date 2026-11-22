@@ -34,8 +34,13 @@ for ($i = 0; $i -lt 3; $i++) {
     Start-Sleep -Seconds 12
 }
 $runEnd = (Get-Date).ToUniversalTime()
-Start-Sleep -Seconds 15
-$pf = @(Get-ChildItem C:\Windows\Prefetch -Filter 'STRUN.EXE-*.pf' -ErrorAction SilentlyContinue)
+# Prefetch 파일은 실행 뒤 조금 지나서 기록된다. 최대 3분 기다린다.
+$pf = @()
+for ($w = 0; $w -lt 36 -and $pf.Count -eq 0; $w++) {
+    Start-Sleep -Seconds 5
+    $pf = @(Get-ChildItem C:\Windows\Prefetch -Filter 'STRUN.EXE-*.pf' -ErrorAction SilentlyContinue)
+}
+Write-Host "Prefetch 폴더의 .pf 파일: $(@(Get-ChildItem C:\Windows\Prefetch -Filter *.pf -ErrorAction SilentlyContinue).Count)개"
 Write-Host "Prefetch 파일: $($pf.Count)개"
 $pf | Format-Table Name, Length, LastWriteTimeUtc | Out-String | Write-Host
 

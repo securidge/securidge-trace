@@ -139,9 +139,9 @@ def live(truth, case):
     check("새 흔적", "Amcache 실행 파일 목록", count.get(("ProgramPresent", "hive_amcache"), 0) > 100, f"{count.get(('ProgramPresent', 'hive_amcache'), 0)}건")
     bam = [e for e in ev if e["source"]["artifact"] == "bam"]
     check("새 흔적", "BAM 장치 경로 → 드라이브 문자", any(e["subject"].upper().startswith("C:\\") for e in bam), [e["subject"] for e in bam][:3])
-    for art, kind in [("hive_amcache", "ProgramPresent"), ("jumplist", "FileOpened"), ("userassist", "ProgramRun")]:
+    for art, kind in [("hive_amcache", "ProgramPresent"), ("jumplist", "FileOpened"), ("userassist", "ProgramRun"), ("prefetch", "ProgramRun")]:
         xs = [e for e in ev if e["source"]["artifact"] == art and e["kind"] == kind]
-        check("예시", art, True, [(e["subject"][-60:], e["time"]["utc"]) for e in xs[:3]], hard=False)
+        check("예시", art, True, [(e["subject"][-60:], e["time"]["utc"], e["details"].get("run_count", "")) for e in xs[:3]], hard=False)
     pf = truth.get("prefetch", {})
     runs = [e for e in ev if e["kind"] == "ProgramRun" and e["source"]["artifact"] == "prefetch" and e["subject"].upper().endswith("\\" + pf.get("name", "?"))]
     if pf.get("exists"):
