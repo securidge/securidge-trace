@@ -1,16 +1,22 @@
-## Securidge Trace v0.2.0
+## Securidge Trace v0.2.1
+
+### v0.2.1에서 고친 점
+- 실제 Windows 가상 머신 시연에서, PC에 붙어 있는 내장 디스크의 연결 기록(이벤트 1006)을 '업무 시간 외 저장장치 사용(R2)'으로 잘못 판단하는 오류를 찾아 고쳤습니다.
+  이제 버스 종류가 USB·SD·MMC인 저장장치만 이동식으로 봅니다. 'USB에서 실행한 프로그램(R9)'도 같은 기준을 씁니다.
+
+---
 
 Windows PC에 남은 사용 기록을 모아 한눈에 보는 보고서로 만드는 무료 점검 도구입니다. 설치 없이 실행합니다.
 
 ### 받는 방법
-1. 아래 **Assets**에서 `SecuridgeTrace-v0.2.0-windows-x64.zip`을 받습니다.
+1. 아래 **Assets**에서 `SecuridgeTrace-v0.2.1-windows-x64.zip`을 받습니다.
 2. 압축을 풀고 `SecuridgeTrace.exe`를 실행합니다. (USB에 복사해 실행하는 것을 권합니다)
 3. 사용법: zip 안의 `사용안내.txt` (English: `Guide-EN.txt`)
 
-변조 확인: `Get-FileHash SecuridgeTrace-v0.2.0-windows-x64.zip -Algorithm SHA256` 값을 `.sha256` 파일과 비교하세요.
+변조 확인: `Get-FileHash SecuridgeTrace-v0.2.1-windows-x64.zip -Algorithm SHA256` 값을 `.sha256` 파일과 비교하세요.
 코드 서명을 하지 않아 처음 실행할 때 "Windows의 PC 보호" 창이 뜰 수 있습니다. [추가 정보] → [실행].
 
-### v0.2.0에서 달라진 점
+### v0.2.0에서 달라진 점 (v0.2.1에도 포함)
 **새로 읽는 흔적**
 - 프로그램 실행: Prefetch(Windows 7~11, 압축 형식 포함 — 실행 횟수·최근 8번 시각·실행 파일이 있던 볼륨), BAM, UserAssist
 - PC에 있었던 실행 파일: Amcache (경로·SHA-1)

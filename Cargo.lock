@@ -3981,7 +3981,7 @@ dependencies = [
 
 [[package]]
 name = "st-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -3999,7 +3999,7 @@ dependencies = [
 
 [[package]]
 name = "st-collect"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4008,7 +4008,7 @@ dependencies = [
 
 [[package]]
 name = "st-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "serde",
@@ -4018,7 +4018,7 @@ dependencies = [
 
 [[package]]
 name = "st-engine"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4036,7 +4036,7 @@ dependencies = [
 
 [[package]]
 name = "st-gui"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono-tz",
  "eframe",
@@ -4050,7 +4050,7 @@ dependencies = [
 
 [[package]]
 name = "st-i18n"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4060,7 +4060,7 @@ dependencies = [
 
 [[package]]
 name = "st-parsers"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "cfb",
  "chrono",
@@ -4078,7 +4078,7 @@ dependencies = [
 
 [[package]]
 name = "st-report"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4095,7 +4095,7 @@ dependencies = [
 
 [[package]]
 name = "st-rules"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4106,7 +4106,7 @@ dependencies = [
 
 [[package]]
 name = "st-timeline"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "encoding_rs",

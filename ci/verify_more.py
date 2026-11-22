@@ -115,6 +115,8 @@ def live(truth, case):
     check("판단", "로그 삭제(R5) — Security·System을 지움", len(r5) >= 2, [f["params"].get("log") for f in r5])
     r6 = [f for f in rules if f["rule_id"] == "R6"]
     check("판단", "사람이 바꾼 시계(R6)", len(r6) >= 1, [f["params"].get("minutes") for f in r6])
+    r2v = [f for f in rules if f["rule_id"] == "R2" and "virtual disk" in f["params"].get("device", "").lower()]
+    check("판단", "내장(가상) 디스크를 저장장치 사용(R2)으로 잡지 않음", len(r2v) == 0, f"{len(r2v)}건")
     check("결과", "등급 = 확인 필요", case["assessment"]["grade"] == "Review", case["assessment"]["grade"])
     # --- 새 흔적 (v0.2) ---
     ntuser = [c for c in case["collection"] if c["artifact"] == "hive_ntuser"]

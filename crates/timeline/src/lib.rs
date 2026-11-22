@@ -501,6 +501,17 @@ fn log_event(item: &FoundItem, le: &eventlog::LogEvent) -> Option<Event> {
                 .join(" ");
             let cap = le.data.get("Capacity").and_then(|c| c.parse::<u64>().ok()).unwrap_or(0);
             details.insert("connected".to_string(), (cap > 0).to_string());
+            // 이 로그는 내장 디스크도 남긴다(부팅할 때마다). 버스 종류로 이동식(USB 7, SD 12, MMC 13)만 가린다.
+            let bus = le.data.get("BusType").and_then(|b| b.trim().parse::<u32>().ok());
+            let system_disk = le.data.get("IsSystemDisk").is_some_and(|v| v.eq_ignore_ascii_case("true") || v == "1");
+            let removable = match bus {
+                Some(b) => matches!(b, 7 | 12 | 13) && !system_disk,
+                None => !system_disk && !label.to_ascii_lowercase().contains("virtual disk"),
+            };
+            if let Some(b) = bus {
+                details.insert("bus_type".to_string(), b.to_string());
+            }
+            details.insert("removable".to_string(), removable.to_string());
             caveats.push("용량이 0이면 분리 기록, 0보다 크면 연결 기록으로 본다.".to_string());
             (EventKind::StorageAttached, if label.is_empty() { "저장장치".to_string() } else { label })
         }

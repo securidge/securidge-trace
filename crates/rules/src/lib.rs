@@ -221,7 +221,7 @@ pub fn assess(a: &Analysis, ctx: &Context) -> Assessment {
     let mut vsn_to_device: BTreeMap<String, (Option<String>, String)> = BTreeMap::new();
     let mut attached_by_vsn: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for (i, e) in ev.iter().enumerate() {
-        if e.kind == EventKind::StorageAttached {
+        if e.kind == EventKind::StorageAttached && detail(e, "removable") != Some("false") {
             if let Some(v) = detail(e, "volume_serial") {
                 let v = v.to_ascii_uppercase();
                 vsn_to_device.insert(v.clone(), (detail(e, "device_serial").map(str::to_string), e.subject.clone()));
@@ -298,7 +298,9 @@ pub fn assess(a: &Analysis, ctx: &Context) -> Assessment {
         for (i, e) in ev.iter().enumerate() {
             let storage_use = matches!(e.kind, EventKind::DeviceLastConnected | EventKind::DeviceFirstConnected)
                 && detail(e, "device_kind") == Some("UsbStorage")
-                || e.kind == EventKind::StorageAttached && detail(e, "connected") == Some("true");
+                || e.kind == EventKind::StorageAttached
+                    && detail(e, "connected") == Some("true")
+                    && detail(e, "removable") != Some("false");
             if storage_use
                 && ctx.in_period(e.time.utc)
                 && !tool_set.contains(&i)
@@ -450,7 +452,7 @@ pub fn assess(a: &Analysis, ctx: &Context) -> Assessment {
     // --- 이동식 볼륨·드라이브 (R9용) ---
     let mut removable_vsn: BTreeSet<String> = BTreeSet::new();
     for e in ev {
-        let is_removable = e.kind == EventKind::StorageAttached
+        let is_removable = (e.kind == EventKind::StorageAttached && detail(e, "removable") != Some("false"))
             || (e.kind == EventKind::FileOpened && detail(e, "drive_type") == Some("removable"));
         if is_removable {
             if let Some(v) = detail(e, "volume_serial").filter(|v| !v.is_empty()) {
@@ -838,5 +840,22 @@ mod tests {
         assert_eq!(r12.len(), 1);
         assert_eq!(r12[0].params["size"], "2.0 GB");
         assert!(private_ip("10.1.2.3") && private_ip("fe80::1") && !private_ip("8.8.8.8"));
+    }
+
+    #[test]
+    fn internal_disks_are_not_storage_use() {
+        // 일요일 03:00 KST (업무 시간 밖)
+        let t = Utc.with_ymd_and_hms(2026, 11, 21, 18, 0, 0).unwrap();
+        let fixed = e(EventKind::StorageAttached, t, "Msft Virtual Disk", &[("connected", "true"), ("removable", "false"), ("volume_serial", "4CDA-EECE")]);
+        let usb = e(EventKind::StorageAttached, t, "SanDisk", &[("connected", "true"), ("removable", "true"), ("volume_serial", "1111-2222")]);
+        let run_c = e(EventKind::ProgramRun, t, "C:\\Windows\\notepad.exe", &[("volume_serial", "4CDA-EECE")]);
+        let rules = RuleConfig::default();
+        let cust = Customer::default();
+        let tool = ToolMedia::default();
+        let r = assess(&analysis(vec![fixed, usb, run_c]), &ctx(&rules, &cust, &tool));
+        let r2: Vec<_> = r.findings.iter().filter(|f| f.rule_id == "R2").collect();
+        assert_eq!(r2.len(), 1, "{:?}", r.findings);
+        assert_eq!(r2[0].params["device"], "SanDisk");
+        assert!(!r.findings.iter().any(|f| f.rule_id == "R9"), "내장 디스크에서 실행한 프로그램은 R9가 아니다");
     }
 }

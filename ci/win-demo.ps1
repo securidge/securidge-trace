@@ -45,7 +45,7 @@ function Click($hwnd, $x, $y) {
 
 # 1) 공개 릴리스 내려받기
 $zip = Join-Path $Out 'st.zip'
-Invoke-WebRequest 'https://github.com/securidge/securidge-trace/releases/download/v0.2.0/SecuridgeTrace-v0.2.0-windows-x64.zip' -OutFile $zip
+Invoke-WebRequest 'https://github.com/securidge/securidge-trace/releases/download/v0.2.1/SecuridgeTrace-v0.2.1-windows-x64.zip' -OutFile $zip
 Expand-Archive $zip -DestinationPath (Join-Path $Out 'app') -Force
 $exe = Get-ChildItem (Join-Path $Out 'app') -Recurse -Filter SecuridgeTrace.exe | Select-Object -First 1
 Write-Host "실행 파일: $($exe.FullName)"
