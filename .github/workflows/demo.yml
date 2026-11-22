@@ -1,0 +1,13 @@
+name: demo
+# 시연 화면 캡처 (demo 브랜치에 올리면 실행). 공개된 릴리스 파일을 그대로 쓴다.
+on:
+  push:
+    branches: [demo]
+jobs:
+  capture:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: 시연 캡처
+        shell: pwsh
+        run: ./ci/win-demo.ps1 -Out D:\demo
