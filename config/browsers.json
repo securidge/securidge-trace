@@ -2,25 +2,72 @@
   {
     "name": "Chrome",
     "family": "chromium",
-    "path_under_user": ["AppData", "Local", "Google", "Chrome", "User Data"],
+    "path_under_user": [
+      "AppData",
+      "Local",
+      "Google",
+      "Chrome",
+      "User Data"
+    ],
     "verified": false
   },
   {
     "name": "Edge",
     "family": "chromium",
-    "path_under_user": ["AppData", "Local", "Microsoft", "Edge", "User Data"],
+    "path_under_user": [
+      "AppData",
+      "Local",
+      "Microsoft",
+      "Edge",
+      "User Data"
+    ],
     "verified": false
   },
   {
     "name": "Whale",
     "family": "chromium",
-    "path_under_user": ["AppData", "Local", "Naver", "Naver Whale", "User Data"],
+    "path_under_user": [
+      "AppData",
+      "Local",
+      "Naver",
+      "Naver Whale",
+      "User Data"
+    ],
+    "verified": false
+  },
+  {
+    "name": "Brave",
+    "family": "chromium",
+    "path_under_user": [
+      "AppData",
+      "Local",
+      "BraveSoftware",
+      "Brave-Browser",
+      "User Data"
+    ],
+    "verified": false
+  },
+  {
+    "name": "Vivaldi",
+    "family": "chromium",
+    "path_under_user": [
+      "AppData",
+      "Local",
+      "Vivaldi",
+      "User Data"
+    ],
     "verified": false
   },
   {
     "name": "Firefox",
     "family": "firefox",
-    "path_under_user": ["AppData", "Roaming", "Mozilla", "Firefox", "Profiles"],
+    "path_under_user": [
+      "AppData",
+      "Roaming",
+      "Mozilla",
+      "Firefox",
+      "Profiles"
+    ],
     "verified": false
   }
 ]

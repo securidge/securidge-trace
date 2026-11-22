@@ -6,7 +6,7 @@
   "app.name": "Securidge Trace",
   "app.tagline": "PC activity review",
   "artifact.bam": "Last program run (BAM)",
-  "artifact.chromium_history": "Browser history (Chrome, Edge, Whale)",
+  "artifact.chromium_history": "Browser history (Chrome, Edge, Whale, Brave, Vivaldi)",
   "artifact.evtx_partition": "Storage connection log",
   "artifact.evtx_rdp_auth": "Remote access authentication log",
   "artifact.evtx_rdp_session": "Remote session log",

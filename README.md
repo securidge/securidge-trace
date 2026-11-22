@@ -1,42 +1,49 @@
 # Securidge Trace
 
-Windows PC에 남은 사용 기록을 모아 **누구나 한눈에 이해할 수 있는 보고서**로 만드는 점검 도구.
-연결됐던 USB·스마트폰·블루투스, 연결했던 네트워크, 열어 본 파일, 지운 파일, 웹 방문·다운로드,
-로그 삭제·시계 변경을 읽고, 판단 규칙에 따라 "특이사항 미발견 / 주의 / 확인 필요 / 판단 불가"로 정리한다.
+Windows PC에 남은 사용 기록을 모아 **누구나 한눈에 이해할 수 있는 보고서**로 만드는 무료 점검 도구.
+연결됐던 USB·스마트폰·블루투스, 열어 본 파일과 폴더, 실행한 프로그램, 지운 파일, 네트워크·원격 접속·전송량,
+웹 방문·다운로드, 로그 삭제·시계 변경을 읽고, 판단 규칙에 따라
+"특이사항 미발견 / 주의 / 확인 필요 / 판단 불가"로 정리한다. 설치 없이 실행한다. 한국어·영어.
 
-대상 사용자: IT 지식이 없어도 되는 **유지보수 업체 직원**. 설치 없이 USB에서 실행한다. 한국어·영어.
+![화면](docs/screenshots/home.png)
+
+<details><summary>보고서 예시</summary>
+
+![보고서](docs/screenshots/report.png)
+
+</details>
 
 ## 내려받기
 
-[Releases](../../releases) 에서 `SecuridgeTrace-<버전>-windows-x64.zip`을 받아 압축을 풀고
+[Releases](../../releases/latest) 에서 `SecuridgeTrace-<버전>-windows-x64.zip`을 받아 압축을 풀고
 `SecuridgeTrace.exe`를 실행한다. 사용법은 zip 안의 `사용안내.txt` (영어: `Guide-EN.txt`).
 
 - 변조 확인: zip과 함께 올린 `.sha256` 파일의 값과 비교한다 (`Get-FileHash 파일.zip -Algorithm SHA256`).
 - 코드 서명을 하지 않았으므로 처음 실행할 때 "Windows의 PC 보호" 창이 뜰 수 있다. [추가 정보] → [실행].
 
-## 용도와 한계
-
-- **1차 점검·참고용이다. 법정 증거용이 아니다.** 판단은 가능성을 알려줄 뿐 특정인의 행동을 단정하지 않는다.
-- **점검할 권한이 있는 PC에서만 사용한다** (본인 소유이거나 계약·동의로 권한을 받은 PC).
-  직원 PC를 점검할 때는 고객사의 법무·개인정보 담당자의 검토가 필요하다.
-- 결과(지난 내역)에는 개인정보가 들어 있다. 보관과 삭제는 사용하는 쪽의 책임이다. v0.1은 내역 암호 보호가 없다.
-- "기록이 없다"는 "행위가 없었다"는 뜻이 아니다.
-- 확인하지 못하는 것: 클라우드 동기화·메신저·메일로 보낸 파일, 인쇄, 화면 촬영, 열지 않고 복사만 한 파일.
-
 ## 무엇을 읽는가
 
-| 자료 | 읽는 것 | 방법 |
+| 자료 | 읽는 것 | 이 PC 점검에서 읽는 방법 |
 |---|---|---|
-| SYSTEM 하이브 | 컴퓨터 이름, 시간대, 코드 페이지, USB 저장장치(최초·마지막 연결, 분리), 휴대 장치(MTP/PTP), 블루투스, 드라이브 문자 | 이 PC 점검: `reg save`, 트랜잭션 로그 적용 |
-| SOFTWARE 하이브 | Windows 버전, 계정(SID ↔ 이름), 네트워크(유선·무선, 최초·마지막 연결, 게이트웨이 MAC) | 〃 |
-| 이벤트 로그 | 로그 삭제(1102·104), 시계 변경(4616·Kernel-General 1), 저장장치 연결(1006, 볼륨 일련번호), 무선 연결(8001·8003) | `wevtutil epl` |
-| 바로 가기(LNK) | 열어 본 파일, 볼륨 일련번호, 드라이브 종류 | 직접 읽기 |
+| SYSTEM 하이브 | 컴퓨터 이름, 시간대, USB 저장장치(최초·마지막 연결, 분리), 휴대 장치, 블루투스, 드라이브 문자, **BAM**(사용자별 프로그램 마지막 실행) | `reg save`, 트랜잭션 로그 적용 |
+| SOFTWARE 하이브 | Windows 버전, 계정(SID ↔ 이름), 네트워크(유선·무선, 최초·마지막 연결) | `reg save` |
+| 사용자 하이브 (NTUSER, UsrClass) | **UserAssist**(탐색기로 실행한 프로그램·횟수), **ShellBags**(열어 본 폴더: USB·네트워크·휴대폰 포함) | 로그온 사용자: `reg save HKU\<SID>`, 그 밖: 직접 읽기 |
+| **Amcache.hve** | PC에 있었던 실행 파일의 경로·SHA-1 | `esentutl /y /vss` (섀도 복사본) |
+| **Prefetch** | 실행한 프로그램, 실행 횟수, 최근 8번 실행 시각, 실행 파일이 있던 볼륨 일련번호 (Windows 7~11, 압축 형식 포함) | 직접 읽기 |
+| **SRUM** | 프로그램별 하루 네트워크 전송량 (약 한 달) | `esentutl /y /vss` |
+| 이벤트 로그 | 로그 삭제(1102·104), 시계 변경(4616·Kernel-General 1), 저장장치 연결(1006), 무선 연결(8001·8003), **원격 데스크톱**(4624 유형 10, 21·24·25, 1149) | `wevtutil epl` |
+| 바로 가기(LNK), **점프 목록** | 열어 본 파일, 볼륨 일련번호, 드라이브 종류, 프로그램별 사용 횟수 | 직접 읽기 |
 | 휴지통 `$I` | 지운 파일의 원래 경로·크기·시각·계정 | 직접 읽기 |
-| 브라우저 | Chrome·Edge·Whale 방문·다운로드, Firefox 방문 | 사본을 만들어 읽기 |
+| 브라우저 | Chrome·Edge·Whale·Brave·Vivaldi 방문·다운로드, Firefox 방문 | 사본을 만들어 읽기 |
 
 판단 규칙: R1 처음 보는 저장장치, R2 업무 시간 외 저장장치, R3 이동식 저장장치의 파일 열람(볼륨 일련번호로 장치와 연결),
-R4 대량 삭제, R5 로그 삭제, R6 사람이 바꾼 시계, R7 휴대 장치, R8 클라우드·웹메일 접속.
-회사 장치 목록에 있는 장치와 점검 도구가 담긴 USB는 판단에서 뺀다. 기준값은 설정에서 바꿀 수 있다.
+R4 대량 삭제, R5 로그 삭제, R6 사람이 바꾼 시계, R7 휴대 장치, R8 클라우드·웹메일 접속,
+R9 이동식 저장장치에서 실행한 프로그램, R10 흔적 지우기 프로그램 실행, R11 원격 데스크톱 접속,
+R12 하루 전송량이 많은 프로그램, R13 원격 제어 프로그램 실행.
+등록한 장치와 점검 도구가 담긴 USB는 판단에서 뺀다. 기준값과 프로그램 이름 목록은 설정에서 바꿀 수 있다.
+
+한계: 1차 점검·참고용이다. "기록이 없다"는 "행위가 없었다"는 뜻이 아니다.
+보낸 파일의 이름·내용, 인쇄, 화면 촬영, 열지 않고 복사만 한 파일은 확인하지 못한다.
 
 ## 검증 현황
 
@@ -68,7 +75,7 @@ Rust 1.97.0 (`rust-toolchain.toml`). 결과: `target/release/SecuridgeTrace.exe`
 
 명령줄:
 ```
-trace check   --i-am-authorized --customer "고객사A" --analyst "홍길동" [--days 30] [--lang ko|en]
+trace check   --i-am-authorized --customer "회사" --analyst "홍길동" [--days 30] [--lang ko|en]
 trace analyze --input E:\ --output D:\결과 --case "PC-01"
 trace regen   --dir <내역 폴더> --lang en
 ```
@@ -80,7 +87,7 @@ trace regen   --dir <내역 폴더> --lang en
 crates/core      데이터 모델, 설정, 시각 변환, 해시, 안전한 바이트 읽기
 crates/i18n      한국어·영어 문구(tools/locales.py에서 생성), 시각 표기
 crates/collect   입력에서 기록 파일 찾기
-crates/parsers   하이브·이벤트 로그·바로 가기·휴지통·브라우저 파서
+crates/parsers   하이브·이벤트 로그·바로 가기·점프 목록·Prefetch(Xpress Huffman)·셸 항목·SRUM·휴지통·브라우저 파서
 crates/timeline  사실로 바꾸고 시간순으로 합치기, 계정 연결
 crates/rules     상관 분석, 판단 규칙, 등급
 crates/report    case.json·evidence.json·timeline.csv·HTML 보고서
@@ -95,4 +102,6 @@ dist/            배포물에 넣는 안내문
 ## 라이선스
 
 MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`). 포함된 외부 라이브러리 목록은 배포 zip의 `THIRD-PARTY-LICENSES.txt`.
-시험용 바로 가기 샘플은 github.com/AbdulRhmanAlfaifi/lnk_parser(MIT)에서 가져왔다.
+시험용 표본: 바로 가기 github.com/AbdulRhmanAlfaifi/lnk_parser(MIT), Prefetch·점프 목록 github.com/EricZimmerman(MIT),
+점프 목록 일부 github.com/libyal/dtformats(Apache-2.0). 점프 목록 AppID 이름표는 EricZimmerman/JumpList(MIT)에서 가져왔다.
+SRUM 데이터베이스 해석은 sootmark-srum(MIT/Apache-2.0)을 쓴다.

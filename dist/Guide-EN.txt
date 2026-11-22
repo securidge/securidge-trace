@@ -1,31 +1,35 @@
 Securidge Trace — PC activity review tool
-==========================================
+=========================================
 
 What it does
-  Collects records such as connected USB drives and phones, opened files, deleted files,
-  web history, cleared logs and clock changes into an easy-to-read report. No installation.
+  Collects activity traces left on a Windows PC into one easy report. No installation.
+  - Devices: USB storage, phones, Bluetooth
+  - Files: files opened (shortcuts, jump lists), folders opened (incl. USB, network, phones), deleted files (Recycle Bin)
+  - Programs: programs run and run counts (Prefetch, BAM, UserAssist), executables present (Amcache)
+  - Network: wired/wireless networks, Remote Desktop access, data sent per program (SRUM)
+  - Web: visits and downloads (Chrome, Edge, Whale, Brave, Vivaldi, Firefox)
+  - Clearing: event log clearing, clock changes, cleanup tools run
 
 How to use (usually 1–3 minutes)
-  1. Copy this folder to a USB drive (running from USB rather than the target PC is recommended).
-  2. On the PC to check, double-click SecuridgeTrace.exe.
-  3. If asked "Do you want to allow this app to make changes?", click Yes
-     (administrator rights are needed to read devices, networks and logs).
-  4. Check this PC -> confirm customer and reviewer -> tick "I am authorized" -> Start check
-  5. Click Open report. Use "Print / Save as PDF" at the top of the report.
+  1. Copy the extracted folder to a USB drive (running from USB is recommended).
+  2. Double-click SecuridgeTrace.exe on the PC to check and allow administrator rights.
+  3. Click the round [Start] button, confirm the details, tick "I am authorized to check this PC", then [Start check].
+  4. Click [Open report]. Use [Print / Save as PDF] at the top of the report.
 
 If "Windows protected your PC" appears
-  This warning appears for new unsigned programs. Click "More info", then "Run anyway".
+  Click [More info] → [Run anyway]. It appears for new unsigned programs.
 
 Where results are saved
-  In the data folder next to the program. Use History to reopen, recreate in another
-  language, or delete. History contains personal data; delete what you no longer need.
+  In the "data" folder next to the program. Use [History] to reopen, recreate in another language or delete.
 
-Important
-  - First-pass review only; not court evidence.
-  - Use only on PCs you are authorized to check.
-  - No record does not mean no activity.
-  - Files sent via sync apps, messengers or mail, printing and screenshots cannot be seen.
+Results
+  Nothing notable found / Caution / Needs review / Undetermined (run again as administrator)
 
-Command line (advanced)
-  trace.exe check --i-am-authorized --customer "Customer A" --analyst "Name"
+Notes
+  - For first-pass review. No record does not mean no activity.
+  - Names and content of files sent, printing and screenshots cannot be seen.
+
+Command line
+  trace.exe check --i-am-authorized --customer "Company" --analyst "Name"
   trace.exe analyze --input E:\ --output D:\results
+  trace.exe --help

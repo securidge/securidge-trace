@@ -22,7 +22,9 @@ Start-Sleep -Seconds 3
 $pfKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters'
 New-Item -Force $pfKey | Out-Null
 Set-ItemProperty $pfKey -Name EnablePrefetcher -Value 3 -Type DWord
+try { Enable-MMAgent -ApplicationLaunchPrefetching -ErrorAction Stop } catch { Write-Host "Enable-MMAgent: $_" }
 try { Set-Service SysMain -StartupType Automatic; Restart-Service SysMain -Force } catch { Write-Host "SysMain: $_" }
+Get-MMAgent | Out-String | Write-Host
 Start-Sleep -Seconds 5
 New-Item -ItemType Directory -Force C:\st-run | Out-Null
 Copy-Item C:\Windows\System32\cmd.exe C:\st-run\STRUN.EXE -Force

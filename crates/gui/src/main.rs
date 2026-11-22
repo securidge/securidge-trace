@@ -716,27 +716,27 @@ impl App {
                                 dot(ui, p.grade(e.grade), 6.0);
                                 ui.label(RichText::new(t(self.lang, e.grade.key())).font(bfont(15.0)).color(p.text));
                                 ui.label(RichText::new(st_i18n::format_stamp(e.started, tz, self.lang)).color(p.muted));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ghost(ui, &self.t("ui.result.open"), Vec2::new(120.0, 32.0)).clicked() {
-                                        let lang = if e.reports.iter().any(|r| r == &format!("report_{}.html", self.lang.code())) {
-                                            self.lang
-                                        } else if e.reports.iter().any(|r| r == "report_ko.html") {
-                                            Lang::Ko
-                                        } else {
-                                            Lang::En
-                                        };
-                                        self.flash = st_engine::open_path(&e.dir.join(format!("report_{}.html", lang.code()))).err();
-                                    }
-                                });
                             });
                             let who = [e.customer.as_str(), e.pc_name.as_str(), e.analyst.as_str()]
                                 .into_iter()
                                 .filter(|s| !s.is_empty())
                                 .collect::<Vec<_>>()
                                 .join("  ·  ");
-                            if !who.is_empty() {
-                                ui.label(RichText::new(who).size(13.0).color(p.muted));
-                            }
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(if who.is_empty() { "-".to_string() } else { who }).size(13.0).color(p.muted));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        if ghost(ui, &self.t("ui.result.open"), Vec2::new(120.0, 32.0)).clicked() {
+                                            let lang = if e.reports.iter().any(|r| r == &format!("report_{}.html", self.lang.code())) {
+                                                self.lang
+                                            } else if e.reports.iter().any(|r| r == "report_ko.html") {
+                                                Lang::Ko
+                                            } else {
+                                                Lang::En
+                                            };
+                                            self.flash = st_engine::open_path(&e.dir.join(format!("report_{}.html", lang.code()))).err();
+                                        }
+                                    });
+                            });
                         }
                     }
                 });
@@ -1227,39 +1227,41 @@ impl App {
                                         chip(ui, &t(self.lang, "ui.history.old"), p.warn);
                                     }
                                 });
-                                let who = [e.customer.as_str(), e.pc_name.as_str(), e.analyst.as_str()]
-                                    .into_iter()
-                                    .filter(|s| !s.is_empty())
-                                    .collect::<Vec<_>>()
-                                    .join("  ·  ");
-                                ui.label(RichText::new(if who.is_empty() { "-".into() } else { who }).size(13.5).color(p.text));
-                            });
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.button(RichText::new(t(self.lang, "ui.delete")).color(p.bad)).clicked() {
-                                    action = Some((3, e.dir.clone(), None));
-                                }
-                                if ui.button(t(self.lang, "ui.result.regen")).clicked() {
-                                    let other = if e.reports.iter().any(|r| r == "report_ko.html") && !e.reports.iter().any(|r| r == "report_en.html") {
-                                        Lang::En
-                                    } else {
-                                        Lang::Ko
-                                    };
-                                    action = Some((1, e.dir.clone(), Some(other)));
-                                }
-                                if ui.button(t(self.lang, "ui.result.folder")).clicked() {
-                                    action = Some((2, e.dir.clone(), None));
-                                }
-                                let open = egui::Button::new(RichText::new(t(self.lang, "ui.result.open")).color(p.on_accent).font(bfont(14.0))).fill(p.accent);
-                                if ui.add(open).clicked() {
-                                    let lang = if e.reports.iter().any(|r| r == &format!("report_{}.html", self.lang.code())) {
-                                        self.lang
-                                    } else if e.reports.iter().any(|r| r == "report_ko.html") {
-                                        Lang::Ko
-                                    } else {
-                                        Lang::En
-                                    };
-                                    action = Some((0, e.dir.clone(), Some(lang)));
-                                }
+                                ui.horizontal(|ui| {
+                                    let who = [e.customer.as_str(), e.pc_name.as_str(), e.analyst.as_str()]
+                                        .into_iter()
+                                        .filter(|s| !s.is_empty())
+                                        .collect::<Vec<_>>()
+                                        .join("  ·  ");
+                                    ui.label(RichText::new(if who.is_empty() { "-".into() } else { who }).size(13.5).color(p.text));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        if ui.button(RichText::new(t(self.lang, "ui.delete")).color(p.bad)).clicked() {
+                                            action = Some((3, e.dir.clone(), None));
+                                        }
+                                        if ui.button(t(self.lang, "ui.result.regen")).clicked() {
+                                            let other = if e.reports.iter().any(|r| r == "report_ko.html") && !e.reports.iter().any(|r| r == "report_en.html") {
+                                                Lang::En
+                                            } else {
+                                                Lang::Ko
+                                            };
+                                            action = Some((1, e.dir.clone(), Some(other)));
+                                        }
+                                        if ui.button(t(self.lang, "ui.result.folder")).clicked() {
+                                            action = Some((2, e.dir.clone(), None));
+                                        }
+                                        let open = egui::Button::new(RichText::new(t(self.lang, "ui.result.open")).color(p.on_accent).font(bfont(14.0))).fill(p.accent);
+                                        if ui.add(open).clicked() {
+                                            let lang = if e.reports.iter().any(|r| r == &format!("report_{}.html", self.lang.code())) {
+                                                self.lang
+                                            } else if e.reports.iter().any(|r| r == "report_ko.html") {
+                                                Lang::Ko
+                                            } else {
+                                                Lang::En
+                                            };
+                                            action = Some((0, e.dir.clone(), Some(lang)));
+                                        }
+                                    });
+                                });
                             });
                         });
                     });

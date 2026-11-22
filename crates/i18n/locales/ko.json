@@ -6,7 +6,7 @@
   "app.name": "Securidge Trace",
   "app.tagline": "PC 사용 기록 점검",
   "artifact.bam": "프로그램 마지막 실행(BAM)",
-  "artifact.chromium_history": "브라우저 기록(Chrome·Edge·Whale)",
+  "artifact.chromium_history": "브라우저 기록(Chrome·Edge·Whale·Brave·Vivaldi)",
   "artifact.evtx_partition": "저장장치 연결 로그",
   "artifact.evtx_rdp_auth": "원격 접속 인증 로그",
   "artifact.evtx_rdp_session": "원격 접속 세션 로그",

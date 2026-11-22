@@ -119,7 +119,10 @@ def live(truth, case):
     # --- 새 흔적 (v0.2) ---
     ntuser = [c for c in case["collection"] if c["artifact"] == "hive_ntuser"]
     check("수집", "로그온 사용자 하이브 reg save HKU", any(c["ok"] for c in ntuser), [(c["method"], c["ok"], c["message"][:80]) for c in ntuser])
-    for art in ["hive_usrclass", "hive_amcache", "srum", "evtx_rdp_session", "evtx_rdp_auth"]:
+    for art in ["hive_amcache", "srum"]:
+        cs = [c for c in case["collection"] if c["artifact"] == art]
+        check("수집", f"{art} (섀도 복사본)", len(cs) > 0 and all(c["ok"] for c in cs), [(c["method"][-40:], c["ok"], c["message"][:100]) for c in cs])
+    for art in ["hive_usrclass", "evtx_rdp_session", "evtx_rdp_auth"]:
         cs = [c for c in case["collection"] if c["artifact"] == art]
         check("수집", art, any(c["ok"] for c in cs), [(c["method"][-40:], c["ok"], c["message"][:100]) for c in cs], hard=False)
     check("수집", "드라이브 정보 (C:의 장치 경로·일련번호)",
@@ -133,6 +136,12 @@ def live(truth, case):
     for kind, art in [("ProgramRun", "prefetch"), ("ProgramRun", "bam"), ("ProgramRun", "userassist"), ("ProgramPresent", "hive_amcache"),
                       ("FolderOpened", "shellbags"), ("FileOpened", "jumplist"), ("NetworkUsage", "srum"), ("RemoteLogon", "evtx_security")]:
         check("새 흔적", f"{kind} ← {art}", count.get((kind, art), 0) > 0, f"{count.get((kind, art), 0)}건", hard=False)
+    check("새 흔적", "Amcache 실행 파일 목록", count.get(("ProgramPresent", "hive_amcache"), 0) > 100, f"{count.get(('ProgramPresent', 'hive_amcache'), 0)}건")
+    bam = [e for e in ev if e["source"]["artifact"] == "bam"]
+    check("새 흔적", "BAM 장치 경로 → 드라이브 문자", any(e["subject"].upper().startswith("C:\\") for e in bam), [e["subject"] for e in bam][:3])
+    for art, kind in [("hive_amcache", "ProgramPresent"), ("jumplist", "FileOpened"), ("userassist", "ProgramRun")]:
+        xs = [e for e in ev if e["source"]["artifact"] == art and e["kind"] == kind]
+        check("예시", art, True, [(e["subject"][-60:], e["time"]["utc"]) for e in xs[:3]], hard=False)
     pf = truth.get("prefetch", {})
     runs = [e for e in ev if e["kind"] == "ProgramRun" and e["source"]["artifact"] == "prefetch" and e["subject"].upper().endswith("\\" + pf.get("name", "?"))]
     if pf.get("exists"):

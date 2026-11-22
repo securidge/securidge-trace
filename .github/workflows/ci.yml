@@ -83,6 +83,12 @@ jobs:
           Get-Content D:\sum-live.md -Encoding utf8 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
           exit $code
 
+      - name: SRUM 데이터베이스 직접 읽어 보기
+        shell: pwsh
+        run: |
+          esentutl /y C:\Windows\System32\sru\SRUDB.dat /vss /d D:\srum-copy.dat | Out-Null
+          cargo run --release -p st-parsers --example probe_srum -- D:\srum-copy.dat
+
       - name: 화면 프로그램 실행 확인
         shell: pwsh
         run: ./ci/win-gui-smoke.ps1 -Exe "$pwd\target\release\SecuridgeTrace.exe" -Shot D:\gui.jpg

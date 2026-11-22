@@ -34,7 +34,7 @@ T = {
 "artifact.evtx_wlan": ("무선 네트워크 로그", "Wireless network log"),
 "artifact.recycle_bin": ("휴지통", "Recycle Bin"),
 "artifact.lnk": ("최근 연 파일(바로 가기)", "Recently opened files (shortcuts)"),
-"artifact.chromium_history": ("브라우저 기록(Chrome·Edge·Whale)", "Browser history (Chrome, Edge, Whale)"),
+"artifact.chromium_history": ("브라우저 기록(Chrome·Edge·Whale·Brave·Vivaldi)", "Browser history (Chrome, Edge, Whale, Brave, Vivaldi)"),
 "artifact.firefox_history": ("브라우저 기록(Firefox)", "Browser history (Firefox)"),
 "artifact.hive_ntuser": ("사용자별 설정 기록(NTUSER)", "Per-user settings (NTUSER)"),
 "artifact.hive_usrclass": ("사용자별 탐색기 기록(UsrClass)", "Per-user Explorer data (UsrClass)"),
