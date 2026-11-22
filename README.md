@@ -1,114 +1,144 @@
-# Securidge Trace
+<p align="center"><img src="assets/icon-256.png" width="96" alt="Securidge Trace icon"></p>
 
-Windows PC에 남은 사용 기록을 모아 **누구나 한눈에 이해할 수 있는 보고서**로 만드는 무료 점검 도구.
-연결됐던 USB·스마트폰·블루투스, 열어 본 파일과 폴더, 실행한 프로그램, 지운 파일, 네트워크·원격 접속·전송량,
-웹 방문·다운로드, 로그 삭제·시계 변경을 읽고, 판단 규칙에 따라
-"특이사항 미발견 / 주의 / 확인 필요 / 판단 불가"로 정리한다. 설치 없이 실행한다. 한국어·영어.
+<h1 align="center">Securidge Trace</h1>
 
-![화면](docs/screenshots/home.png)
+<p align="center">
+A free Windows tool that turns the activity traces a PC leaves behind into <b>one report anyone can read</b>.<br>
+No installation · English / 한국어 · Open source (MIT OR Apache-2.0)
+</p>
 
-<details><summary>보고서 예시</summary>
+<p align="center">
+<a href="https://github.com/securidge/securidge-trace/releases/latest/download/SecuridgeTrace-windows-x64.zip"><b>⬇ Download the latest version (Windows x64, zip)</b></a>
+&nbsp;·&nbsp; <a href="../../releases/latest">Release notes</a>
+&nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
+</p>
 
-![보고서](docs/screenshots/report.png)
+![Securidge Trace](docs/screenshots/en-home.png)
+
+## What it does
+
+Windows records a lot on its own: which USB drives were plugged in, which files and folders were opened,
+which programs ran, what was deleted, which networks and remote sessions were used, and whether logs were
+cleared or the clock was changed. Securidge Trace reads those records **read-only**, puts them on one timeline,
+applies 13 plain-language rules, and writes a report with one of four results:
+
+**Nothing found · Caution · Needs review · Undetermined (not enough data)**
+
+Each finding cites the record numbers it is based on and says how it could be a false alarm.
+
+## Quick start
+
+1. [Download the zip](https://github.com/securidge/securidge-trace/releases/latest/download/SecuridgeTrace-windows-x64.zip) and unzip it (running it from a USB drive is recommended).
+2. Run `SecuridgeTrace.exe` and allow administrator rights (needed to read the registry and event logs).
+3. Click the big **Start** ring, confirm the details, tick *I am authorized to check this PC*, and start.
+4. After 1–3 minutes, click **Open report**.
+
+| 1. Start | 2. Confirm | 3. Running | 4. Result |
+|---|---|---|---|
+| ![](docs/screenshots/en-home.png) | ![](docs/screenshots/en-form.png) | ![](docs/screenshots/en-progress.png) | ![](docs/screenshots/en-result.png) |
+
+**Every check writes the report in both English and Korean**; the button at the top right of the report switches language.
+The summary is shown first and every detail section opens with **Show details**, so the page stays calm. Printing always includes everything.
+
+<details><summary>Report example</summary>
+
+![Report](docs/screenshots/en-report.png)
 
 </details>
 
-## 내려받기
+- Integrity: compare the zip with the `.sha256` file next to it (`Get-FileHash file.zip -Algorithm SHA256`).
+- The program is not code-signed, so Windows SmartScreen may warn on first run: **More info → Run anyway**.
+- Full guide: `Guide-EN.txt` inside the zip.
 
-[Releases](../../releases/latest) 에서 `SecuridgeTrace-<버전>-windows-x64.zip`을 받아 압축을 풀고
-`SecuridgeTrace.exe`를 실행한다. 사용법은 zip 안의 `사용안내.txt` (영어: `Guide-EN.txt`).
+## What it reads
 
-- 변조 확인: zip과 함께 올린 `.sha256` 파일의 값과 비교한다 (`Get-FileHash 파일.zip -Algorithm SHA256`).
-- 코드 서명을 하지 않았으므로 처음 실행할 때 "Windows의 PC 보호" 창이 뜰 수 있다. [추가 정보] → [실행].
-
-## 무엇을 읽는가
-
-| 자료 | 읽는 것 | 이 PC 점검에서 읽는 방법 |
+| Source | What | How (live check of this PC) |
 |---|---|---|
-| SYSTEM 하이브 | 컴퓨터 이름, 시간대, USB 저장장치(최초·마지막 연결, 분리), 휴대 장치, 블루투스, 드라이브 문자, **BAM**(사용자별 프로그램 마지막 실행) | `reg save`, 트랜잭션 로그 적용 |
-| SOFTWARE 하이브 | Windows 버전, 계정(SID ↔ 이름), 네트워크(유선·무선, 최초·마지막 연결) | `reg save` |
-| 사용자 하이브 (NTUSER, UsrClass) | **UserAssist**(탐색기로 실행한 프로그램·횟수), **ShellBags**(열어 본 폴더: USB·네트워크·휴대폰 포함) | 로그온 사용자: `reg save HKU\<SID>`, 그 밖: 직접 읽기 |
-| **Amcache.hve** | PC에 있었던 실행 파일의 경로·SHA-1 | `esentutl /y /vss` (섀도 복사본) |
-| **Prefetch** | 실행한 프로그램, 실행 횟수, 최근 8번 실행 시각, 실행 파일이 있던 볼륨 일련번호 (Windows 7~11, 압축 형식 포함) | 직접 읽기 |
-| **SRUM** | 프로그램별 하루 네트워크 전송량 (약 한 달) | `esentutl /y /vss` |
-| 이벤트 로그 | 로그 삭제(1102·104), 시계 변경(4616·Kernel-General 1), 저장장치 연결(1006), 무선 연결(8001·8003), **원격 데스크톱**(4624 유형 10, 21·24·25, 1149) | `wevtutil epl` |
-| 바로 가기(LNK), **점프 목록** | 열어 본 파일, 볼륨 일련번호, 드라이브 종류, 프로그램별 사용 횟수 | 직접 읽기 |
-| 휴지통 `$I` | 지운 파일의 원래 경로·크기·시각·계정 | 직접 읽기 |
-| 브라우저 | Chrome·Edge·Whale·Brave·Vivaldi 방문·다운로드, Firefox 방문 | 사본을 만들어 읽기 |
+| SYSTEM hive | Computer name, time zone, USB storage (first/last connected, removed), portable devices, Bluetooth, drive letters, **BAM** (last run per user) | `reg save`, transaction logs applied |
+| SOFTWARE hive | Windows version, accounts (SID ↔ name), networks (wired/wireless, first/last connected) | `reg save` |
+| User hives (NTUSER, UsrClass) | **UserAssist** (programs started from Explorer, run counts), **ShellBags** (folders opened, incl. USB/network/phone) | `reg save HKU\<SID>` for logged-on users, otherwise direct |
+| **Amcache.hve** | Executables that existed on the PC, path and SHA-1 | `esentutl /y /vss` (shadow copy) |
+| **Prefetch** | Programs run, run count, last 8 run times, volume serial of the executable (Windows 7–11, compressed format) | Direct |
+| **SRUM** | Network bytes per program per day (about 30 days) | `esentutl /y /vss` |
+| Event logs | Log cleared (1102, 104), clock changed (4616, Kernel-General 1), storage connected (1006), Wi-Fi (8001, 8003), **Remote Desktop** (4624 type 10, 21/24/25, 1149) | `wevtutil epl` |
+| Shortcuts (LNK), **Jump Lists** | Files opened, volume serial, drive type, per-program recent items | Direct |
+| Recycle Bin `$I` | Original path, size, time and account of deleted files | Direct |
+| Browsers | Chrome, Edge, Whale, Brave, Vivaldi visits and downloads; Firefox visits | Read from a copy |
 
-판단 규칙: R1 처음 보는 저장장치, R2 업무 시간 외 저장장치, R3 이동식 저장장치의 파일 열람(볼륨 일련번호로 장치와 연결),
-R4 대량 삭제, R5 로그 삭제, R6 사람이 바꾼 시계, R7 휴대 장치, R8 클라우드·웹메일 접속,
-R9 이동식 저장장치에서 실행한 프로그램, R10 흔적 지우기 프로그램 실행, R11 원격 데스크톱 접속,
-R12 하루 전송량이 많은 프로그램, R13 원격 제어 프로그램 실행.
-등록한 장치와 점검 도구가 담긴 USB는 판단에서 뺀다. 기준값과 프로그램 이름 목록은 설정에서 바꿀 수 있다.
+**Rules:** R1 new storage device · R2 storage used outside work hours · R3 files opened from removable storage (linked to the device by volume serial) ·
+R4 mass deletion · R5 log cleared · R6 clock changed by a person · R7 portable device · R8 cloud / webmail ·
+R9 program run from removable storage · R10 anti-forensics tool run · R11 Remote Desktop logon ·
+R12 program with large daily upload · R13 remote-control tool run.
+Registered devices and the USB that carries the tool are excluded. Thresholds and program-name lists are editable in Settings.
 
-한계: 1차 점검·참고용이다. "기록이 없다"는 "행위가 없었다"는 뜻이 아니다.
-보낸 파일의 이름·내용, 인쇄, 화면 촬영, 열지 않고 복사만 한 파일은 확인하지 못한다.
+**Limits:** this is a first-pass, reference-only review. *No record* does not mean *no activity*.
+It cannot see the names or contents of files sent out, printing, screenshots, or files copied without being opened.
 
-## 검증 현황
+## Validation status
 
-GitHub Actions의 Windows 가상 머신(Windows Server 2022, 2025)에서 매 push마다 자동으로 검증한다.
-결과는 Actions 실행 화면의 요약(Summary)에 표로 나온다.
+Every push is verified automatically on GitHub Actions Windows virtual machines (Windows Server 2022 and 2025);
+results appear as a table in each run's Summary.
 
-| 검증 | 방법 | Server 2022 / 2025 | 일반 PC용 Windows 10 / 11 |
+| Check | Method | Server 2022 / 2025 | Desktop Windows 10 / 11 |
 |---|---|---|---|
-| 바로 가기: 경로(한글), 볼륨 일련번호, 크기, 열람 시각 | 셸 API로 만든 실제 바로 가기와 대조 + 공개 샘플 17개 교차 검증 | 통과 | 미검증 |
-| 휴지통: 경로(한글), 크기, 삭제 시각, 계정 | 실제로 휴지통에 보낸 파일과 대조 | 통과 | 미검증 |
-| 레지스트리: USB·휴대 장치·블루투스·드라이브 문자·네트워크(로컬→UTC)·계정 | `reg save`로 만든 **정답 하이브**와 대조 (26개 항목) | 통과 | 미검증 |
-| 이 PC 점검: 수집, 시스템 정보·계정·네트워크, 로그 삭제(R5)·시계 변경(R6) 탐지 | 실제로 로그를 지우고 시계를 바꾼 뒤 `trace check` | 통과 | 미검증 |
-| 사용자 하이브 수집 (`reg save HKU\<SID>`, `_Classes`) | 이 PC 점검 | 통과 | 미검증 |
-| Amcache·SRUM 수집 (`esentutl /vss`), Amcache 해석 | 이 PC 점검에서 실행 파일 4,000개 이상 읽음 | 통과 | 미검증 |
-| BAM: 장치 경로 → 드라이브 문자 | 이 PC 점검 (`\Device\HarddiskVolumeN` → `C:\…`) | 통과 | 미검증 |
-| 점프 목록, UserAssist | 이 PC 점검에서 실제 기록 읽음 + 공개 표본(EZ, dtformats) 값 대조 | 통과 (읽기) | 미검증 |
-| Prefetch (Windows 7·8·10 형식, 압축 풀기) | 공개 표본의 실행 횟수·시각·볼륨 일련번호 대조 | 통과 (표본) / 서버판은 Prefetch가 기본으로 꺼져 있어 실기 대조는 참고 | 미검증 |
-| SRUM 데이터베이스 해석 | 실제 SRUDB.dat의 표를 읽음 (응용 프로그램 사용량 900여 건) | 통과 (읽기) / 네트워크 사용량 표는 가상 머신에 기록이 없어 미검증 | 미검증 |
-| ShellBags, 원격 데스크톱 로그 | 형식 문서 기준 단위 테스트 | 실기 미검증 (가상 머신에 기록 없음) | 미검증 |
-| 화면 프로그램 실행 | 실행 후 15초 생존, 스크린샷 | 통과 | 미검증 |
-| 실제 USB 장치·스마트폰 | — | 불가 (가상 머신에 장치 없음) | 미검증 |
-| 저장장치 연결 로그(1006), 무선 연결 로그 | 형식 문서 기준 단위 테스트 | 실기 미검증 | 미검증 |
-| 브라우저 실제 DB | — | 미검증 | 미검증 |
-| 판단 규칙(R1~R13), 시각 표기, 보고서, 손상 입력 내성 | 단위·통합 테스트 | 통과 | — |
+| Shortcuts: path (incl. Korean), volume serial, size, open time | Compared with real shortcuts created via the Shell API + 17 public samples | Pass | Not yet |
+| Recycle Bin: path, size, deletion time, account | Compared with files actually sent to the Recycle Bin | Pass | Not yet |
+| Registry: USB, portable, Bluetooth, drive letters, networks (local→UTC), accounts | Compared with a ground-truth hive made with `reg save` (26 items) | Pass | Not yet |
+| Live check: collection, system info, R5 log cleared, R6 clock changed | Logs actually cleared and clock actually changed, then `trace check` | Pass | Not yet |
+| User hives, Amcache, SRUM collection; Amcache parsing (4,000+ executables) | Live check | Pass | Not yet |
+| BAM device path → drive letter | Live check (`\Device\HarddiskVolumeN` → `C:\…`) | Pass | Not yet |
+| Jump Lists, UserAssist | Real records on the VM + public samples (EZ, dtformats) | Pass (parsing) | Not yet |
+| Prefetch (Win 7/8/10 formats, decompression) | Run counts, times, volume serials of public samples | Pass (samples); Prefetch is off by default on Server | Not yet |
+| SRUM database | Real SRUDB.dat tables (≈900 app-usage rows) | Pass (parsing); the VM has no network-usage rows | Not yet |
+| Internal (virtual) disks not counted as USB storage (v0.2.1 fix) | Live demo on the VM | Pass | Not yet |
+| ShellBags, Remote Desktop logs, storage/Wi-Fi logs | Unit tests against format documentation | No real records on the VM | Not yet |
+| Real USB drives and phones, real browser databases | — | Not possible on a VM | Not yet |
+| Rules R1–R13, time formatting, reports, malformed-input robustness | Unit and integration tests | Pass | — |
 
-**실제 USB와 일반 PC용 Windows 10·11, 화면의 한글 입력은 사람이 한 번 확인해야 한다.**
-절차: `docs/test-scenarios.md`
+**Real USB devices and desktop Windows 10/11 still need one manual pass.** Procedure: `docs/test-scenarios.md`.
 
-## 직접 빌드
+## Build from source
 
 ```
 cargo test --workspace
 cargo build --release -p st-gui -p st-cli
 ```
-Rust 1.97.0 (`rust-toolchain.toml`). 결과: `target/release/SecuridgeTrace.exe`(화면), `trace.exe`(명령줄).
-
-명령줄:
-```
-trace check   --i-am-authorized --customer "회사" --analyst "홍길동" [--days 30] [--lang ko|en]
-trace analyze --input E:\ --output D:\결과 --case "PC-01"
-trace regen   --dir <내역 폴더> --lang en
-```
-종료 코드: 0 정상 / 2 끝났지만 읽지 못한 항목이 있거나 입력이 바뀜 / 1 실행하지 못함
-
-## 폴더 구성
+Rust 1.97.0 (`rust-toolchain.toml`). Output: `target/release/SecuridgeTrace.exe` (app) and `trace.exe` (command line).
 
 ```
-crates/core      데이터 모델, 설정, 시각 변환, 해시, 안전한 바이트 읽기
-crates/i18n      한국어·영어 문구(tools/locales.py에서 생성), 시각 표기
-crates/collect   입력에서 기록 파일 찾기
-crates/parsers   하이브·이벤트 로그·바로 가기·점프 목록·Prefetch(Xpress Huffman)·셸 항목·SRUM·휴지통·브라우저 파서
-crates/timeline  사실로 바꾸고 시간순으로 합치기, 계정 연결
-crates/rules     상관 분석, 판단 규칙, 등급
-crates/report    case.json·evidence.json·timeline.csv·HTML 보고서
-crates/engine    점검 실행(이 PC 점검 수집 포함), 설정·고객사·지난 내역
-crates/gui       화면 프로그램 (egui)
-crates/cli       명령줄
-ci/              Windows 실기 검증 스크립트
-docs/            Phase 0 보고서, 결정 기록, 데이터 모델, 화면 설계, 시험 절차서
-dist/            배포물에 넣는 안내문
+trace check   --i-am-authorized --customer "Company" --analyst "Alex Kim" [--days 30] [--lang en|ko]
+trace analyze --input E:\ --output D:\results --case "PC-01"
+trace regen   --dir <history folder> --lang ko
 ```
+Exit codes: 0 ok · 2 finished, but some items could not be read or the input changed · 1 could not run.
 
-## 라이선스
+<details><summary>Repository layout</summary>
 
-MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`). 포함된 외부 라이브러리 목록은 배포 zip의 `THIRD-PARTY-LICENSES.txt`.
-시험용 표본: 바로 가기 github.com/AbdulRhmanAlfaifi/lnk_parser(MIT), Prefetch·점프 목록 github.com/EricZimmerman(MIT),
-점프 목록 일부 github.com/libyal/dtformats(Apache-2.0). 점프 목록 AppID 이름표는 EricZimmerman/JumpList(MIT)에서 가져왔다.
-SRUM 데이터베이스 해석은 sootmark-srum(MIT/Apache-2.0)을 쓴다.
+```
+crates/core      data model, settings, time conversion, hashing, safe byte reading
+crates/i18n      English/Korean strings (generated by tools/locales.py), time formatting
+crates/collect   finding record files in the input
+crates/parsers   hives, event logs, shortcuts, Jump Lists, Prefetch (Xpress Huffman), shell items, SRUM, Recycle Bin, browsers
+crates/timeline  turning records into facts on one timeline, linking accounts
+crates/rules     correlation, rules, grade
+crates/report    case.json, evidence.json, timeline.csv, HTML reports
+crates/engine    running a check (incl. live collection), settings, customers, history
+crates/gui       desktop app (egui)
+crates/cli       command line
+assets/          app icon (SVG source, ICO)
+ci/              Windows VM validation and demo-capture scripts
+docs/            design notes, data model, test procedures
+dist/            guides shipped in the zip
+```
+</details>
+
+## Author
+
+Made by **Kwangmo Kim (김광모)** as a personal project, free for everyone.
+
+## License
+
+MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`). Third-party libraries are listed in `THIRD-PARTY-LICENSES.txt` inside the zip.
+Test samples: shortcuts from github.com/AbdulRhmanAlfaifi/lnk_parser (MIT); Prefetch and Jump Lists from github.com/EricZimmerman (MIT);
+some Jump Lists from github.com/libyal/dtformats (Apache-2.0). Jump List AppID names come from EricZimmerman/JumpList (MIT).
+SRUM parsing uses sootmark-srum (MIT/Apache-2.0).
