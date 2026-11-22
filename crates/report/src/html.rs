@@ -169,11 +169,24 @@ ol.key{padding-left:0;list-style:none;counter-reset:k}ol.key li{margin:8px 0;pad
 .toolbar{position:sticky;top:0;z-index:2;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);padding:10px 44px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
 button{font:inherit;font-weight:600;padding:7px 16px;border:0;background:var(--accent);color:#fff;border-radius:8px;cursor:pointer}
 .bar{height:6px;background:var(--soft);border-radius:3px;margin:3px 0 4px;overflow:hidden}.bar span{display:block;height:100%;background:var(--accent);border-radius:3px}
+details.sec{border:1px solid var(--line);border-radius:12px;margin:10px 0;background:#fff}
+details.sec>summary{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;list-style:none;font-weight:600;font-size:14px}
+details.sec>summary::-webkit-details-marker,details summary::-webkit-details-marker{display:none}
+details.sec>summary:hover{background:var(--soft);border-radius:12px}
+details.sec .in{padding:0 16px 8px;border-top:1px solid var(--line)}
+details.sec .in>table:first-child,details.sec .in>p:first-child{margin-top:12px}
+details>summary{cursor:pointer;list-style:none}
+.more{margin-left:auto;font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap;flex:none}
+.more:before{content:var(--more-label)}details[open]>summary .more:before{content:var(--less-label)}
+ol.key details>summary{display:flex;align-items:baseline;gap:4px}ol.key details .fp{margin-top:6px}
+details.box>summary{display:flex;align-items:center}
+button.ghost{background:var(--soft);color:var(--ink);border:1px solid var(--line)}
+a.lang{margin-left:auto;font-weight:600;color:var(--accent);text-decoration:none;border:1px solid var(--accent);border-radius:8px;padding:5px 14px;white-space:nowrap}
 .part{page-break-before:always}.part:first-of-type{page-break-before:auto}
 .mono{font-family:Consolas,"D2Coding",monospace;font-size:11.5px}
 .pg td:nth-child(1),.pg th,.pg td.nw{white-space:nowrap;word-break:keep-all}.pg td:nth-child(2){word-break:break-word}
 .tl td:nth-child(1),.tl td:nth-child(2),.tl td:nth-child(3),.tl td:nth-child(6),.tl th{white-space:nowrap;word-break:keep-all}.tl td:nth-child(7){width:30%}
-@media print{html{background:#fff}.page{margin:0;max-width:none;box-shadow:none;border-radius:0}.toolbar{display:none}.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}h2{page-break-after:avoid}tr{page-break-inside:avoid}}
+@media print{html{background:#fff}.more{display:none}.page{margin:0;max-width:none;box-shadow:none;border-radius:0}.toolbar{display:none}.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}h2{page-break-after:avoid}tr{page-break-inside:avoid}}
 "#;
 
 /// 보고서 HTML 전체.
@@ -187,16 +200,22 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
 
     let _ = write!(
         h,
-        "<!DOCTYPE html><html lang=\"{}\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{} — {}</title><style>{CSS}</style></head><body><div class=\"page\">",
+        "<!DOCTYPE html><html lang=\"{}\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{} — {}</title><style>{CSS}:root{{--more-label:\"{}\";--less-label:\"{}\"}}</style></head><body><div class=\"page\">",
         lang.code(),
         esc(&c.t("report.title")),
-        esc(&i.pc_name)
+        esc(&i.pc_name),
+        c.t("report.more").replace(['"', '\\', '<'], ""),
+        c.t("report.less").replace(['"', '\\', '<'], "")
     );
     let _ = write!(
         h,
-        "<div class=\"toolbar\"><button onclick=\"window.print()\">{}</button><span class=\"note\">{}</span></div>",
+        "<div class=\"toolbar\"><button onclick=\"window.print()\">{}</button><button class=\"ghost\" onclick=\"stAll(true)\">{}</button><button class=\"ghost\" onclick=\"stAll(false)\">{}</button><span class=\"note\">{}</span><a class=\"lang\" href=\"report_{}.html\">{}</a></div>",
         esc(&c.t("report.print")),
-        esc(&c.t("report.print_hint"))
+        esc(&c.t("report.expand_all")),
+        esc(&c.t("report.collapse_all")),
+        esc(&c.t("report.details_hint")),
+        if lang == Lang::Ko { "en" } else { "ko" },
+        esc(&c.t("report.other_lang"))
     );
     let _ = write!(
         h,
@@ -257,7 +276,7 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
         for f in key {
             let _ = write!(
                 h,
-                "<li><span class=\"lv lv-{:?}\">{}</span>{}<div class=\"fp\">{}</div></li>",
+                "<li><details><summary><span class=\"lv lv-{:?}\">{}</span>{}<span class=\"more\"></span></summary><div class=\"fp\">{}</div></details></li>",
                 f.level,
                 esc(&c.t(&format!("level.{:?}", f.level))),
                 esc(&finding_sentence(f, lang, tz)),
@@ -292,7 +311,7 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
     }
     h.push_str("</ul>");
 
-    let _ = write!(h, "<div class=\"box\"><b>{}</b><ul>", esc(&c.t("report.cannot_check")));
+    let _ = write!(h, "<details class=\"box\"><summary><b>{}</b><span class=\"more\"></span></summary><ul>", esc(&c.t("report.cannot_check")));
     for k in ["cannot.1", "cannot.2", "cannot.3", "cannot.4", "cannot.5"] {
         let _ = write!(h, "<li>{}</li>", esc(&c.t(k)));
     }
@@ -305,10 +324,11 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
     if !missing.is_empty() {
         let _ = write!(h, "<li>{}: {}</li>", esc(&c.t("report.missing_data")), esc(&missing.join(", ")));
     }
-    let _ = write!(h, "</ul></div><p class=\"note\">{}</p></section>", esc(&c.t("report.reference_only")));
+    let _ = write!(h, "</ul></details><p class=\"note\">{}</p></section>", esc(&c.t("report.reference_only")));
 
     // ===== 2부 =====
     let _ = write!(h, "<section class=\"part\"><h2><span class=\"no\">2</span>{}</h2>", esc(&c.t("report.part2")));
+    let part2_start = h.len();
 
     // 판단 근거
     let _ = write!(h, "<h3>{}</h3>", esc(&c.t("report.findings")));
@@ -637,9 +657,34 @@ pub fn render(case: &CaseData, lang: Lang, regenerated: Option<DateTime<Utc>>) -
     for k in ["limit.1", "limit.2", "limit.3"] {
         let _ = write!(h, "<li>{}</li>", esc(&c.t(k)));
     }
-    let _ = write!(h, "</ul><p class=\"note\">{}</p></section></div></div></body></html>", esc(&c.t("report.reference_only")));
+    h.push_str("</ul>");
+    let part2 = h.split_off(part2_start);
+    h.push_str(&collapse_sections(&part2));
+    let _ = write!(h, "<p class=\"note\">{}</p></section></div></div><script>{SCRIPT}</script></body></html>", esc(&c.t("report.reference_only")));
     h
 }
+
+/// 2부의 각 소제목(h3) 묶음을 접을 수 있는 칸으로 바꾼다. 처음에는 닫혀 있다.
+fn collapse_sections(part: &str) -> String {
+    let mut out = String::with_capacity(part.len() + 2048);
+    let mut pieces = part.split("<h3>");
+    if let Some(head) = pieces.next() {
+        out.push_str(head);
+    }
+    for piece in pieces {
+        let (title, rest) = piece.split_once("</h3>").unwrap_or((piece, ""));
+        let _ = write!(
+            out,
+            "<details class=\"sec\"><summary><span class=\"t\">{title}</span><span class=\"more\"></span></summary><div class=\"in\">{rest}</div></details>"
+        );
+    }
+    out
+}
+
+/// 모두 펼치기·접기, 인쇄할 때 모두 펼치기.
+const SCRIPT: &str = r#"function stAll(o){document.querySelectorAll('details').forEach(function(d){d.open=o})}
+var stPrev=[];window.addEventListener('beforeprint',function(){stPrev=[];document.querySelectorAll('details').forEach(function(d){stPrev.push(d.open);d.open=true})});
+window.addEventListener('afterprint',function(){document.querySelectorAll('details').forEach(function(d,i){d.open=stPrev[i]||false})});"#;
 
 const SECTION_LIMIT: usize = 100;
 

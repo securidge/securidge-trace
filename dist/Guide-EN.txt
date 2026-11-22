@@ -15,6 +15,8 @@ How to use (usually 1–3 minutes)
   2. Double-click SecuridgeTrace.exe on the PC to check and allow administrator rights.
   3. Click the round [Start] button, confirm the details, tick "I am authorized to check this PC", then [Start check].
   4. Click [Open report]. Use [Print / Save as PDF] at the top of the report.
+     Each check writes both an English and a Korean report; the button at the top right switches language.
+     Detail sections open with [Show details]; printing always includes every section.
 
 If "Windows protected your PC" appears
   Click [More info] → [Run anyway]. It appears for new unsigned programs.

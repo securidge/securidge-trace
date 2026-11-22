@@ -36,6 +36,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.97.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release -p st-cli -p st-gui
+      - name: 실행 파일 아이콘 확인
+        run: python tools/check_icon.py assets/icon.ico target/release/SecuridgeTrace.exe target/release/trace.exe
 
       - name: 정답이 있는 실제 기록 만들기
         shell: pwsh

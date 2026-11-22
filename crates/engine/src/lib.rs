@@ -232,7 +232,9 @@ fn run_inner(
             let _ = std::fs::rename(o, dir.join("collected"));
         }
     }
-    st_report::write_all(dir, &case, &[p.report_lang])?;
+    // 두 언어 보고서를 함께 만든다. 고른 언어가 먼저(CSV 언어).
+    let other = if p.report_lang == Lang::Ko { Lang::En } else { Lang::Ko };
+    st_report::write_all(dir, &case, &[p.report_lang, other])?;
     let report_path = dir.join(format!("report_{}.html", p.report_lang.code()));
     Ok((case, report_path))
 }

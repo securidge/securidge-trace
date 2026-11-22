@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- 16·24px용 단순화 버전: 고리 하나와 두 점 -->
+  <rect x="0" y="0" width="256" height="256" rx="52" fill="#101721"/>
+  <path d="M 150.6 190.1 A 66 66 0 1 1 190.1 150.6" fill="none" stroke="#22D3EE" stroke-width="34" stroke-linecap="round"/>
+  <circle cx="128" cy="128" r="26" fill="#E6FBFF"/>
+  <circle cx="180" cy="180" r="22" fill="#E6FBFF"/>
+</svg>

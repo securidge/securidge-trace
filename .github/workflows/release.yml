@@ -51,6 +51,11 @@ jobs:
           Compress-Archive -Path $dir -DestinationPath $zip -Force
           $h = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$h  $name.zip" | Out-File -Encoding ascii "out\$name.zip.sha256"
+          # 버전 없는 이름도 함께 올린다: README의 "최신 버전 내려받기" 고정 링크용
+          Copy-Item $zip "out\SecuridgeTrace-windows-x64.zip"
+          "$h  SecuridgeTrace-windows-x64.zip" | Out-File -Encoding ascii "out\SecuridgeTrace-windows-x64.zip.sha256"
+          python tools/check_icon.py assets/icon.ico target/release/SecuridgeTrace.exe target/release/trace.exe
+          if ($LASTEXITCODE -ne 0) { throw '실행 파일에 아이콘이 없음' }
           Get-ChildItem out | Format-Table Name, Length | Out-Host
           "ZIP=$zip" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "SUM=out\$name.zip.sha256" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
@@ -65,3 +70,5 @@ jobs:
           files: |
             ${{ env.ZIP }}
             ${{ env.SUM }}
+            out/SecuridgeTrace-windows-x64.zip
+            out/SecuridgeTrace-windows-x64.zip.sha256

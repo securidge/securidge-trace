@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Securidge Trace 아이콘: 그래파이트 둥근 사각형, 흔적을 훑는 두 고리, 고리 틈의 추적점 -->
+  <rect x="8" y="8" width="240" height="240" rx="58" fill="#101721"/>
+  <path d="M 152.6 195.7 A 72 72 0 1 1 195.7 152.6" fill="none" stroke="#22D3EE" stroke-width="18" stroke-linecap="round"/>
+  <path d="M 114.3 90.4 A 40 40 0 1 1 90.4 114.3" fill="none" stroke="#7DE9F8" stroke-width="13" stroke-linecap="round"/>
+  <circle cx="128" cy="128" r="12" fill="#E6FBFF"/>
+  <circle cx="178.9" cy="178.9" r="12" fill="#E6FBFF"/>
+</svg>

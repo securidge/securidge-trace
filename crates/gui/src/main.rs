@@ -64,8 +64,8 @@ impl Pal {
             card2: Color32::from_rgb(25, 31, 42),
             line: Color32::from_rgb(36, 44, 58),
             text: Color32::from_rgb(230, 237, 243),
-            muted: Color32::from_rgb(145, 156, 172),
-            faint: Color32::from_rgb(92, 104, 120),
+            muted: Color32::from_rgb(160, 171, 187),
+            faint: Color32::from_rgb(120, 132, 150),
             accent: Color32::from_rgb(34, 211, 238),
             accent_soft: Color32::from_rgba_unmultiplied(34, 211, 238, 28),
             on_accent: Color32::from_rgb(6, 24, 30),
@@ -203,7 +203,10 @@ fn install_style(ctx: &egui::Context, p: &Pal) {
     v.widgets.active.fg_stroke = Stroke::new(1.0, p.text);
     v.widgets.active.corner_radius = r;
     v.widgets.open = v.widgets.active;
-    ctx.set_visuals(v);
+    // Windows가 밝은 테마여도 egui가 밝은 기본 위젯을 쓰지 않도록, 고른 테마로 고정하고 두 칸 모두에 같은 모양을 넣는다.
+    ctx.set_theme(if p.dark { egui::Theme::Dark } else { egui::Theme::Light });
+    ctx.set_visuals_of(egui::Theme::Dark, v.clone());
+    ctx.set_visuals_of(egui::Theme::Light, v);
     ctx.all_styles_mut(|style| {
         use egui::TextStyle;
         style.text_styles = [
@@ -220,38 +223,9 @@ fn install_style(ctx: &egui::Context, p: &Pal) {
     });
 }
 
-/// 창 아이콘: 동심원 고리와 점 (그림 파일 없이 그린다).
+/// 창 아이콘: assets/icon.svg를 64px로 그린 RGBA (실행 파일 아이콘과 같은 그림).
 fn app_icon() -> egui::IconData {
-    let n = 64usize;
-    let mut rgba = vec![0u8; n * n * 4];
-    let c = (n as f32 - 1.0) / 2.0;
-    for y in 0..n {
-        for x in 0..n {
-            let dx = x as f32 - c;
-            let dy = y as f32 - c;
-            let d = (dx * dx + dy * dy).sqrt();
-            let ang = dy.atan2(dx);
-            let (r, g, b, a) = if d < 30.0 {
-                let ring1 = (d - 24.0).abs() < 3.2 && !(ang > 0.35 && ang < 1.35);
-                let ring2 = (d - 15.0).abs() < 2.6 && !(ang > -2.6 && ang < -1.7);
-                let dot = d < 5.5;
-                if ring1 || ring2 || dot {
-                    (34u8, 211u8, 238u8, 255u8)
-                } else {
-                    (14, 18, 26, 255)
-                }
-            } else if d < 31.5 {
-                (14, 18, 26, 200)
-            } else {
-                (0, 0, 0, 0)
-            };
-            let i = (y * n + x) * 4;
-            if let Some(px) = rgba.get_mut(i..i + 4) {
-                px.copy_from_slice(&[r, g, b, a]);
-            }
-        }
-    }
-    egui::IconData { rgba, width: n as u32, height: n as u32 }
+    egui::IconData { rgba: include_bytes!("../../../assets/icon-64.rgba").to_vec(), width: 64, height: 64 }
 }
 
 // ---------------------------------------------------------------- 그리기 도구
@@ -543,7 +517,7 @@ impl App {
         }
 
         // 아래쪽: 권한, 언어, 버전
-        let bottom_h = 150.0;
+        let bottom_h = 172.0;
         let space = ui.available_height() - bottom_h;
         if space > 0.0 {
             ui.add_space(space);
@@ -571,6 +545,8 @@ impl App {
             }
         });
         ui.label(RichText::new(format!("v{}", env!("CARGO_PKG_VERSION"))).size(11.5).color(p.faint));
+        ui.add_space(2.0);
+        ui.add(egui::Label::new(RichText::new(self.t("app.made_by")).size(11.5).color(p.muted)).wrap());
     }
 
     // ------------------------------------------------------------ 첫 실행

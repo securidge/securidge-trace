@@ -6,6 +6,7 @@ import json, os
 T = {
 # 공통
 "app.name": ("Securidge Trace", "Securidge Trace"),
+"app.made_by": ("만든 사람 · 김광모 (Kwangmo Kim)", "Made by Kwangmo Kim (김광모)"),
 "app.tagline": ("PC 사용 기록 점검", "PC activity review"),
 "weekday.mon": ("월","Mon"), "weekday.tue": ("화","Tue"), "weekday.wed": ("수","Wed"),
 "weekday.thu": ("목","Thu"), "weekday.fri": ("금","Fri"), "weekday.sat": ("토","Sat"), "weekday.sun": ("일","Sun"),
@@ -179,6 +180,12 @@ T = {
 "report.glossary": ("용어 풀이", "Glossary"),
 "report.limits": ("이 도구의 한계", "Limits of this tool"),
 "report.reference_only": ("이 보고서는 1차 점검·참고용이며 법정 증거용이 아닙니다. 판단은 '가능성'을 알려줄 뿐 특정인의 행동을 단정하지 않습니다.", "This report is for first-pass review only and is not court evidence. Findings indicate possibilities and do not establish what any person did."),
+"report.more": ("자세히 보기", "Show details"),
+"report.less": ("접기", "Hide"),
+"report.expand_all": ("모두 펼치기", "Expand all"),
+"report.collapse_all": ("모두 접기", "Collapse all"),
+"report.other_lang": ("English", "한국어"),
+"report.details_hint": ("항목 제목을 누르면 자세한 내용이 열립니다. 인쇄할 때는 모두 펼쳐서 인쇄됩니다.", "Click a section title to open its details. Printing always includes every section."),
 "report.print": ("인쇄 / PDF로 저장", "Print / Save as PDF"),
 "report.print_hint": ("PDF로 저장하려면 인쇄 창에서 대상(프린터)을 'PDF로 저장'으로 고르세요.", "To save as PDF, choose 'Save as PDF' as the printer."),
 "report.none": ("없음", "None"),

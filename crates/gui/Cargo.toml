@@ -20,6 +20,7 @@ eframe = "0.37"
 
 [build-dependencies]
 embed-manifest = "1.5"
+winresource = "0.1"
 
 [lints]
 workspace = true

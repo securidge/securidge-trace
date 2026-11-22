@@ -3721,6 +3721,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c187e0a369471c550af028cba56d4f4fa2a489ad28151ae95a4d340a2a8b782"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3981,7 +3990,7 @@ dependencies = [
 
 [[package]]
 name = "st-cli"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -3995,11 +4004,12 @@ dependencies = [
  "st-i18n",
  "st-report",
  "st-timeline",
+ "winresource",
 ]
 
 [[package]]
 name = "st-collect"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -4008,7 +4018,7 @@ dependencies = [
 
 [[package]]
 name = "st-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "serde",
@@ -4018,7 +4028,7 @@ dependencies = [
 
 [[package]]
 name = "st-engine"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4036,7 +4046,7 @@ dependencies = [
 
 [[package]]
 name = "st-gui"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono-tz",
  "eframe",
@@ -4046,11 +4056,12 @@ dependencies = [
  "st-i18n",
  "st-report",
  "st-rules",
+ "winresource",
 ]
 
 [[package]]
 name = "st-i18n"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4060,7 +4071,7 @@ dependencies = [
 
 [[package]]
 name = "st-parsers"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "cfb",
  "chrono",
@@ -4078,7 +4089,7 @@ dependencies = [
 
 [[package]]
 name = "st-report"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4095,7 +4106,7 @@ dependencies = [
 
 [[package]]
 name = "st-rules"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4106,7 +4117,7 @@ dependencies = [
 
 [[package]]
 name = "st-timeline"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "encoding_rs",
@@ -4332,6 +4343,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "1.2.2+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5426cb1b964690d913f6c5c1a1ae0b42f428ec506bb4d452876d7a209c9bca3b"
+dependencies = [
+ "indexmap",
+ "serde_core",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_parser",
+ "toml_writer",
+ "winnow",
+]
+
+[[package]]
 name = "toml_datetime"
 version = "1.1.3+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4360,6 +4386,12 @@ checksum = "e6769c452d71ba30696c6b37770c439a9cc9110f47f7d5cdbeda79840ef5ea31"
 dependencies = [
  "winnow",
 ]
+
+[[package]]
+name = "toml_writer"
+version = "1.2.0+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
 name = "tracing"
@@ -5312,6 +5344,16 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "winresource"
+version = "0.1.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2bc6d36480b829272a5bdabf08e6dca8004761c1da7e35efef800540c66221b"
+dependencies = [
+ "toml",
+ "version_check",
 ]
 
 [[package]]

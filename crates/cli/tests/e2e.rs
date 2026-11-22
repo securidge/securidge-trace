@@ -192,7 +192,8 @@ fn full_run_is_correct_reproducible_and_leaves_input_untouched() {
 
     // 해시 목록이 실제 파일과 맞는가
     let sums = fs::read_to_string(dir1.join("SHA256SUMS.txt")).unwrap();
-    assert_eq!(sums.lines().count(), 4, "{sums}");
+    assert_eq!(sums.lines().count(), 5, "{sums}"); // evidence, case, timeline, report_ko, report_en
+    assert!(dir1.join("report_en.html").exists());
     assert!(st_report::verify_sums(&dir1).unwrap().is_empty());
 
     // 보고서의 실행 시각 형식: 2026.11.21.(토), 18:01:02 (KST, UTC+09:00)
